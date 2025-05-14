@@ -140,13 +140,36 @@ exports.getVideoInfo = (url) => {
               let fileSizeApprox = '';
               if (bestFormat.filesize_approx) {
                 fileSizeApprox = formatFileSize(bestFormat.filesize_approx);
+                console.log(`[YTDLP] Using filesize_approx for ${resolution}p: ${fileSizeApprox}`);
               } else if (bestFormat.filesize) {
                 fileSizeApprox = formatFileSize(bestFormat.filesize);
+                console.log(`[YTDLP] Using filesize for ${resolution}p: ${fileSizeApprox}`);
               } else if (bestFormat.tbr) {
                 // Ước tính kích thước dựa trên bitrate và thời lượng
                 const durationInSeconds = videoInfo.duration || 0;
-                const fileSizeBytes = (bestFormat.tbr * 1000 * durationInSeconds) / 8;
+                // Áp dụng hệ số nén
+                const compressionFactor = 0.7;
+                const fileSizeBytes = (bestFormat.tbr * 1000 * durationInSeconds * compressionFactor) / 8;
                 fileSizeApprox = formatFileSize(fileSizeBytes);
+                console.log(`[YTDLP] Estimated file size from tbr for ${resolution}p: ${fileSizeApprox} (duration: ${durationInSeconds}s, bitrate: ${bestFormat.tbr} Kbps)`);
+              } else {
+                // Ước tính dựa trên độ phân giải
+                const durationInSeconds = videoInfo.duration || 0;
+                let bitrate = 0;
+                
+                // Ước tính bitrate dựa trên độ phân giải
+                if (resolution >= 2160) bitrate = 15000;
+                else if (resolution >= 1440) bitrate = 8000;
+                else if (resolution >= 1080) bitrate = 4000;
+                else if (resolution >= 720) bitrate = 2000;
+                else if (resolution >= 480) bitrate = 1000;
+                else bitrate = 700;
+                
+                // Áp dụng hệ số nén
+                const compressionFactor = 0.7;
+                const fileSizeBytes = (bitrate * 1000 * durationInSeconds * compressionFactor) / 8;
+                fileSizeApprox = formatFileSize(fileSizeBytes);
+                console.log(`[YTDLP] Estimated file size for ${resolution}p: ${fileSizeApprox} (duration: ${durationInSeconds}s, bitrate: ${bitrate} Kbps)`);
               }
               
               // Tạo lựa chọn chất lượng
@@ -185,17 +208,24 @@ exports.getVideoInfo = (url) => {
                 const durationInSeconds = videoInfo.duration || 0;
                 let bitrate = 0;
                 
-                // Ước tính bitrate dựa trên độ phân giải
-                if (resolution >= 2160) bitrate = 35000; // ~35 Mbps cho 4K
-                else if (resolution >= 1440) bitrate = 16000; // ~16 Mbps cho 2K
-                else if (resolution >= 1080) bitrate = 8000; // ~8 Mbps cho Full HD
-                else if (resolution >= 720) bitrate = 5000; // ~5 Mbps cho HD
-                else if (resolution >= 480) bitrate = 2500; // ~2.5 Mbps cho SD
-                else bitrate = 1500; // ~1.5 Mbps cho thấp hơn
+                // Ước tính bitrate dựa trên độ phân giải (điều chỉnh giảm để phản ánh chính xác hơn)
+                // Các giá trị này đã được điều chỉnh dựa trên dữ liệu thực tế
+                if (resolution >= 2160) bitrate = 15000; // ~15 Mbps cho 4K
+                else if (resolution >= 1440) bitrate = 8000; // ~8 Mbps cho 2K
+                else if (resolution >= 1080) bitrate = 4000; // ~4 Mbps cho Full HD
+                else if (resolution >= 720) bitrate = 2000; // ~2 Mbps cho HD
+                else if (resolution >= 480) bitrate = 1000; // ~1 Mbps cho SD
+                else bitrate = 700; // ~700 Kbps cho thấp hơn
+                
+                // Áp dụng hệ số nén (YouTube sử dụng nén hiệu quả)
+                const compressionFactor = 0.7; // Hệ số nén trung bình
                 
                 // Ước tính kích thước file (bitrate * thời lượng / 8 để chuyển từ bit sang byte)
-                const fileSizeBytes = (bitrate * 1000 * durationInSeconds) / 8;
+                const fileSizeBytes = (bitrate * 1000 * durationInSeconds * compressionFactor) / 8;
                 fileSizeApprox = formatFileSize(fileSizeBytes);
+                
+                // Log để debug
+                console.log(`[YTDLP] Estimated file size for ${resolution}p: ${fileSizeApprox} (duration: ${durationInSeconds}s, bitrate: ${bitrate} Kbps)`);
                 
                 // Tạo lựa chọn chất lượng tổng hợp
                 qualityOptions.push({
@@ -312,10 +342,10 @@ exports.getVideoInfo = (url) => {
  * @param {string} outputDir - Thư mục đầu ra
  * @returns {Promise} - Promise chứa đường dẫn đến file đã tải
  */
-exports.downloadVideo = (url, formatId, outputDir) => {
+exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
   return new Promise((resolve, reject) => {
     logDebug(`Downloading video from URL: ${url}`);
-    logDebug(`Format ID/Quality: ${formatId}`);
+    logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
     logDebug(`Output directory: ${outputDir}`);
     
     // Tạo tên file duy nhất
@@ -325,12 +355,14 @@ exports.downloadVideo = (url, formatId, outputDir) => {
     // Xác định các tham số tải xuống dựa trên formatId
     let downloadArgs = [];
     
-    console.log(`[YTDLP] Processing download request for formatId: ${formatId}`);
+    // Ưu tiên sử dụng qualityKey nếu có
+    const effectiveQuality = qualityKey || formatId;
+    console.log(`[YTDLP] Processing download request for quality: ${effectiveQuality}`);
     
     // Kiểm tra xem formatId có phải là một trong các lựa chọn chất lượng đơn giản không
-    if (formatId.match(/^\d+p$/)) {
+    if (effectiveQuality.match(/^\d+p$/)) {
       // Đây là lựa chọn độ phân giải (ví dụ: 720p, 1080p)
-      const resolution = parseInt(formatId.replace('p', ''));
+      const resolution = parseInt(effectiveQuality.replace('p', ''));
       logDebug(`Detected resolution-based quality: ${resolution}p`);
       console.log(`[YTDLP] Using resolution-based quality: ${resolution}p`);
       
@@ -355,16 +387,16 @@ exports.downloadVideo = (url, formatId, outputDir) => {
       
       console.log(`[YTDLP_DOWNLOAD_COMMAND] Using format string: ${formatString}`);
       console.log(`[YTDLP_DOWNLOAD_COMMAND] Ensuring video and audio are merged with ffmpeg`);
-    } else if (formatId.startsWith('audio_')) {
+    } else if (effectiveQuality.startsWith('audio_')) {
       // Đây là lựa chọn chỉ âm thanh
-      logDebug(`Detected audio-only format: ${formatId}`);
-      console.log(`[YTDLP] Using audio-only format: ${formatId}`);
+      logDebug(`Detected audio-only format: ${effectiveQuality}`);
+      console.log(`[YTDLP] Using audio-only format: ${effectiveQuality}`);
       
       // Xác định định dạng âm thanh
       let audioFormat = 'mp3';
       let audioBitrate = '128';
       
-      const audioParts = formatId.split('_');
+      const audioParts = effectiveQuality.split('_');
       if (audioParts.length >= 2) {
         audioFormat = audioParts[1] || 'mp3';
       }
@@ -384,11 +416,13 @@ exports.downloadVideo = (url, formatId, outputDir) => {
         '--force-overwrites' // Ghi đè file nếu đã tồn tại
       ];
       
-      // Thêm tham số để đảm bảo không tự động chuyển đổi sang MP4
-      if (audioFormat === 'mp3' || audioFormat === 'webm' || audioFormat === 'm4a') {
-        downloadArgs.push('--postprocessor-args', `"-c:a libmp3lame -q:a 2 -f ${audioFormat}"`);
+      // Không sử dụng --postprocessor-args vì nó gây ra lỗi
+      // Thay vào đó, chỉ sử dụng các tham số cơ bản của yt-dlp
+      if (audioFormat === 'mp3') {
+        // Đối với MP3, chỉ cần các tham số cơ bản
+        // yt-dlp sẽ tự động sử dụng ffmpeg để chuyển đổi sang MP3
       }
-    } else if (formatId === 'best') {
+    } else if (effectiveQuality === 'best') {
       // Lựa chọn "Chất lượng tốt nhất có sẵn"
       logDebug('Using best available quality');
       console.log(`[YTDLP] Using best available quality`);
@@ -397,21 +431,21 @@ exports.downloadVideo = (url, formatId, outputDir) => {
         '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '--merge-output-format', 'mp4'
       ];
-    } else if (formatId.includes('+') || formatId.includes('/')) {
+    } else if (effectiveQuality.includes('+') || effectiveQuality.includes('/')) {
       // Đây là format ID phức tạp (có thể là bestvideo+bestaudio hoặc tương tự)
-      logDebug(`Using complex format ID: ${formatId}`);
-      console.log(`[YTDLP] Using complex format ID: ${formatId}`);
+      logDebug(`Using complex format ID: ${effectiveQuality}`);
+      console.log(`[YTDLP] Using complex format ID: ${effectiveQuality}`);
       
       downloadArgs = [
-        '-f', formatId,
+        '-f', effectiveQuality,
         '--merge-output-format', 'mp4'
       ];
     } else {
       // Sử dụng format ID cụ thể (tương thích với code cũ)
-      logDebug(`Using specific format ID: ${formatId}`);
-      console.log(`[YTDLP] Using specific format ID: ${formatId}`);
+      logDebug(`Using specific format ID: ${effectiveQuality}`);
+      console.log(`[YTDLP] Using specific format ID: ${effectiveQuality}`);
       
-      downloadArgs = ['-f', formatId];
+      downloadArgs = ['-f', effectiveQuality];
     }
     
     // Thêm các tham số chung

@@ -429,8 +429,8 @@ exports.downloadVideo = async (req, res, next) => {
           }
         }, 2000); // Cập nhật mỗi 2 giây
         
-        // Tải video
-        const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir);
+        // Tải video - truyền thêm qualityKey để đảm bảo sử dụng chất lượng đúng
+        const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir, qualityKey);
         
         // Dừng cập nhật tiến trình
         clearInterval(progressInterval);

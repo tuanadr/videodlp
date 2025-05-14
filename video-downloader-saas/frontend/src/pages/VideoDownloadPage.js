@@ -468,7 +468,14 @@ const VideoDownloadPage = () => {
                                     name="format"
                                     value={format.format_id}
                                     checked={isFormatSelected(format.format_id)}
-                                    onChange={() => setSelectedFormat(format.format_id)}
+                                    onChange={() => {
+                                      // Khi chọn một định dạng mới, reset trạng thái tải xuống
+                                      setSelectedFormat(format.format_id);
+                                      setDownloadStatus(null);
+                                      setVideoId(null);
+                                      setDownloadProgress(0);
+                                      setError(null);
+                                    }}
                                     disabled={!format.isAllowed}
                                     className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                                   />
