@@ -1,129 +1,45 @@
-# Config
-*.conf
-cookies
-*cookies.txt
-.netrc
-
-# Downloaded
-*.annotations.xml
-*.aria2
-*.description
-*.dump
-*.frag
-*.frag.aria2
-*.frag.urls
-*.info.json
-*.live_chat.json
-*.meta
-*.part*
-*.tmp
-*.temp
-*.unknown_video
-*.ytdl
-.cache/
-
-*.3gp
-*.ape
-*.ass
-*.avi
-*.desktop
-*.f4v
-*.flac
-*.flv
-*.gif
-*.jpeg
-*.jpg
-*.lrc
-*.m4a
-*.m4v
-*.mhtml
-*.mkv
-*.mov
-*.mp3
-*.mp4
-*.mpg
-*.mpga
-*.oga
-*.ogg
-*.opus
-*.png
-*.sbv
-*.srt
-*.ssa
-*.swf
-*.tt
-*.ttml
-*.url
-*.vtt
-*.wav
-*.webloc
-*.webm
-*.webp
-
-# Allow config/media files in testdata
-!test/**
-
 # Python
-*.pyc
-*.pyo
-.*_cache
-wine-py2exe/
-py2exe.log
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
 build/
+develop-eggs/
 dist/
-zip/
-tmp/
-venv/
-.venv/
-completions/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Misc
-*~
-*.DS_Store
-*.kate-swp
-MANIFEST
-test/local_parameters.json
-.coverage
-cover/
-secrets/
-updates_key.pem
-*.egg-info
-.tox
-*.class
-*.isorted
-*.stackdump
-uv.lock
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Generated
-AUTHORS
-README.txt
-.mailmap
-*.1
-*.bash-completion
-*.fish
-*.tar.gz
-*.zsh
-*.spec
-test/testdata/sigs/player-*.js
-
-# Binary
-/youtube-dl
-/youtube-dlc
-/yt-dlp
-yt-dlp.zip
-*.exe
-
-# Text Editor / IDE
-.idea
-*.iml
-.vscode
-*.sublime-*
-*.code-workspace
+# IDE
+.idea/
+.vscode/
 *.swp
+*.swo
 
-# Lazy extractors
-*/extractor/lazy_extractors.py
+# OS
+.DS_Store
+Thumbs.db
 
-# Plugins
-ytdlp_plugins/
-yt-dlp-plugins
+# Project specific
+video-downloader-saas/backend/downloads/
