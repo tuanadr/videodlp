@@ -11,6 +11,8 @@ const userRoutes = require('./routes/user');
 const videoRoutes = require('./routes/video');
 const paymentRoutes = require('./routes/payment');
 const adminRoutes = require('./routes/admin'); // Thêm routes cho admin
+const settingsRoutes = require('./routes/settings'); // Thêm routes cho settings
+const referralRoutes = require('./routes/referral'); // Thêm routes cho referral
 
 const app = express();
 
@@ -43,6 +45,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes); // Thêm routes cho admin
+app.use('/api/settings', settingsRoutes); // Thêm routes cho settings
+app.use('/api/referrals', referralRoutes); // Thêm routes cho referral
 
 // Thêm route cho đường dẫn gốc
 app.get('/', (req, res) => {
@@ -54,7 +58,9 @@ app.get('/', (req, res) => {
       '/api/users - Quản lý người dùng',
       '/api/videos - Tải và quản lý video',
       '/api/payments - Thanh toán và đăng ký',
-      '/api/admin - Quản trị hệ thống'
+      '/api/admin - Quản trị hệ thống',
+      '/api/settings - Cài đặt hệ thống',
+      '/api/referrals - Hệ thống giới thiệu'
     ]
   });
 });

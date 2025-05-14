@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { Link } from 'react-router-dom';
 
 const VideoDownloadPage = () => {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [url, setUrl] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState('');
@@ -48,7 +50,23 @@ const VideoDownloadPage = () => {
     
     try {
       console.log('Fetching video info for URL:', url);
-      const res = await axios.post('/api/videos/info', { url });
+      
+      // Lấy token từ localStorage để đảm bảo nó được gửi đi
+      const token = localStorage.getItem('token');
+      
+      // Tạo config với headers chứa token (nếu có)
+      const config = {};
+      if (token) {
+        config.headers = {
+          'Authorization': `Bearer ${token}`
+        };
+        console.log('Including auth token in request');
+      } else {
+        console.log('No auth token available');
+      }
+      
+      // Gửi yêu cầu với config chứa headers
+      const res = await axios.post('/api/videos/info', { url }, config);
       console.log('Video info response:', res.data);
       
       const videoData = res.data.data;
@@ -114,17 +132,22 @@ const VideoDownloadPage = () => {
     setDownloadStatus('pending');
     setDownloadProgress(0);
     
+    // Tìm định dạng được chọn để lấy thông tin qualityKey
+    const selectedFormatObj = videoInfo?.formats?.find(format => format.format_id === selectedFormat);
+    
     // Tạo payload cho yêu cầu tải xuống
     const payload = {
       url: url, // Sử dụng URL gốc mà người dùng đã nhập
       formatId: selectedFormat,
       title: videoInfo?.title,
-      formatType: currentFormatType // Thêm thông tin về loại định dạng (video hoặc audio)
+      formatType: currentFormatType, // Thêm thông tin về loại định dạng (video hoặc audio)
+      qualityKey: selectedFormatObj?.qualityKey || '' // Thêm qualityKey để backend có thể xác định độ phân giải
     };
     
     // Log payload để debug
     console.log('Download request payload:', payload);
     console.log('Current format type:', currentFormatType);
+    console.log('Selected format details:', selectedFormatObj);
     
     try {
       console.log('Starting download with format:', selectedFormat);
@@ -159,27 +182,26 @@ const VideoDownloadPage = () => {
       const res = await axios.get(`/api/videos/${id}/status`);
       const status = res.data.data.status;
       const errorMessage = res.data.data.error;
+      const progress = res.data.data.progress || 0;
       
       setDownloadStatus(status);
       
-      // Cập nhật tiến trình tải xuống
-      switch (status) {
-        case 'pending':
-          setDownloadProgress(10);
-          break;
-        case 'processing':
-          setDownloadProgress(50);
-          break;
-        case 'completed':
-          setDownloadProgress(100);
-          setLoading(false);
-          break;
-        case 'failed':
-          setError(errorMessage || 'Tải video thất bại. Vui lòng thử lại.');
-          setLoading(false);
-          break;
-        default:
-          break;
+      // Cập nhật tiến trình tải xuống với phần trăm chính xác
+      if (status === 'completed') {
+        setDownloadProgress(100);
+        setLoading(false);
+      } else if (status === 'failed') {
+        setError(errorMessage || 'Tải video thất bại. Vui lòng thử lại.');
+        setLoading(false);
+      } else {
+        // Sử dụng giá trị progress từ backend hoặc ước tính dựa trên trạng thái
+        if (progress > 0) {
+          setDownloadProgress(progress);
+        } else if (status === 'pending') {
+          setDownloadProgress(5 + Math.floor(Math.random() * 10)); // 5-15%
+        } else if (status === 'processing') {
+          setDownloadProgress(30 + Math.floor(Math.random() * 40)); // 30-70%
+        }
       }
       
       // Tiếp tục kiểm tra nếu chưa hoàn thành
@@ -196,83 +218,19 @@ const VideoDownloadPage = () => {
 
   // Không cần hàm handleStreamVideo nữa vì chúng ta sẽ sử dụng thẻ <a> trực tiếp
 
-  // Hàm lấy danh sách phụ đề
+  // Hàm lấy danh sách phụ đề - tạm thời vô hiệu hóa
   const handleGetSubtitles = async () => {
-    if (!url) {
-      setSubtitleError('Vui lòng nhập URL video');
-      return;
-    }
-    
-    setLoadingSubtitles(true);
-    setSubtitleError(null);
-    
-    try {
-      console.log('Fetching subtitles for URL:', url);
-      const res = await axios.post('/api/videos/list-subtitles', { url });
-      console.log('Subtitles response:', res.data);
-      
-      const subtitleData = res.data.data;
-      setSubtitles(subtitleData);
-      
-      if (subtitleData.length === 0) {
-        setSubtitleError('Không tìm thấy phụ đề cho video này');
-      } else {
-        setShowSubtitlesModal(true);
-      }
-    } catch (error) {
-      console.error('Lỗi khi lấy danh sách phụ đề:', error);
-      setSubtitleError(
-        error.response?.data?.message ||
-        'Không thể lấy danh sách phụ đề. Vui lòng thử lại.'
-      );
-    } finally {
-      setLoadingSubtitles(false);
-    }
+    // Tính năng đang được phát triển
+    setSubtitleError('Tính năng tải phụ đề đang được phát triển và sẽ sớm được cập nhật.');
+    return;
   };
 
-  // Hàm tải phụ đề
+  // Hàm tải phụ đề - tạm thời vô hiệu hóa
   const handleDownloadSubtitle = async (lang, format = 'srt') => {
-    if (!url) {
-      setSubtitleError('Vui lòng nhập URL video');
-      return;
-    }
-    
-    setLoadingSubtitles(true);
-    setSubtitleError(null);
-    
-    try {
-      console.log('Downloading subtitle:', { lang, format });
-      const res = await axios.post('/api/videos/download-subtitle', {
-        url,
-        lang,
-        format,
-        title: videoInfo?.title
-      });
-      console.log('Subtitle download response:', res.data);
-      
-      // Lấy ID phụ đề để tải xuống
-      const subtitleId = res.data.data.subtitleId;
-      
-      // Tạo một thẻ a ẩn để tải xuống
-      const a = document.createElement('a');
-      a.href = `/api/videos/subtitle-file/${subtitleId}`;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      
-      // Đóng modal sau khi tải xuống
-      setShowSubtitlesModal(false);
-    } catch (error) {
-      console.error('Lỗi khi tải phụ đề:', error);
-      setSubtitleError(
-        error.response?.data?.message ||
-        'Không thể tải phụ đề. Vui lòng thử lại.'
-      );
-    } finally {
-      setLoadingSubtitles(false);
-    }
+    // Tính năng đang được phát triển
+    setSubtitleError('Tính năng tải phụ đề đang được phát triển và sẽ sớm được cập nhật.');
+    setShowSubtitlesModal(false);
+    return;
   };
 
   // Kiểm tra xem format có phải là premium không
@@ -325,7 +283,7 @@ const VideoDownloadPage = () => {
             
             {user?.subscription !== 'premium' && (
               <p className="mt-2 text-sm text-gray-500">
-                Bạn đang sử dụng gói Miễn phí. Giới hạn tải xuống: 3 video/ngày, chỉ chất lượng cơ bản (≤ 720p).
+                Bạn đang sử dụng gói Miễn phí. Giới hạn tải xuống: {settings.maxDownloadsPerDay} video/ngày, chỉ chất lượng cơ bản (≤ 720p).
               </p>
             )}
           </div>
@@ -463,26 +421,18 @@ const VideoDownloadPage = () => {
                           )}
                           
                           <button
-                            onClick={handleGetSubtitles}
-                            disabled={loadingSubtitles}
-                            className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center"
+                            disabled={true}
+                            className="border-transparent text-gray-500 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center cursor-not-allowed opacity-70"
                           >
-                            {loadingSubtitles ? (
-                              <>
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Đang tải...
-                              </>
-                            ) : (
-                              <>
-                                <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Tải phụ đề
-                              </>
-                            )}
+                            <>
+                              <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Tải phụ đề
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Đang phát triển
+                              </span>
+                            </>
                           </button>
                         </nav>
                       </div>
@@ -509,7 +459,7 @@ const VideoDownloadPage = () => {
                                       ? 'bg-primary-50 border border-primary-200'
                                       : 'bg-white border border-gray-200 hover:bg-gray-50'
                                   } ${
-                                    isFormatPremium(format) ? 'opacity-60' : ''
+                                    !format.isAllowed ? 'opacity-60' : ''
                                   }`}
                                 >
                                   <input
@@ -519,22 +469,45 @@ const VideoDownloadPage = () => {
                                     value={format.format_id}
                                     checked={isFormatSelected(format.format_id)}
                                     onChange={() => setSelectedFormat(format.format_id)}
-                                    disabled={isFormatPremium(format)}
+                                    disabled={!format.isAllowed}
                                     className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                                   />
                                   <label htmlFor={`format-${format.qualityKey}`} className="ml-3 block text-sm font-medium text-gray-900 flex-grow">
-                                    {format.label}
-                                    {isFormatPremium(format) && (
-                                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                                        Premium
-                                      </span>
-                                    )}
+                                    <div className="flex flex-col">
+                                      <div className="flex items-center">
+                                        {format.label}
+                                        {!format.isAllowed && format.requirement === 'premium' && (
+                                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            Premium
+                                          </span>
+                                        )}
+                                        {!format.isAllowed && format.requirement === 'login' && (
+                                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                            Cần đăng nhập
+                                          </span>
+                                        )}
+                                      </div>
+                                      {format.fileSizeApprox && (
+                                        <span className="text-xs text-gray-500 mt-1">
+                                          Kích thước ước tính: {format.fileSizeApprox}
+                                        </span>
+                                      )}
+                                    </div>
                                   </label>
                                 </div>
                               ))}
                           </div>
                           
-                          {user?.subscription !== 'premium' && videoInfo.formats.some(f => f.isPremium) && (
+                          {!user && videoInfo.formats.some(f => !f.isAllowed && f.requirement === 'login') && (
+                            <div className="mt-2 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                              <span className="font-medium">Lưu ý:</span> Đăng nhập để tải video chất lượng cao hơn (≤ 1080p).
+                              <Link to="/login" className="text-primary-600 hover:text-primary-800 ml-1">
+                                Đăng nhập ngay
+                              </Link>
+                            </div>
+                          )}
+                          
+                          {user?.subscription !== 'premium' && videoInfo.formats.some(f => !f.isAllowed && f.requirement === 'premium') && (
                             <div className="mt-2 text-xs text-gray-500 bg-yellow-50 p-2 rounded">
                               <span className="font-medium">Lưu ý:</span> Các định dạng có nhãn "Premium" chỉ khả dụng cho người dùng Premium.
                               <Link to="/dashboard/subscription" className="text-primary-600 hover:text-primary-800 ml-1">
@@ -561,8 +534,9 @@ const VideoDownloadPage = () => {
                                     {downloadStatus === 'pending' && 'Đang chuẩn bị...'}
                                     {downloadStatus === 'processing' && 'Đang xử lý...'}
                                     {downloadStatus === 'completed' && 'Hoàn thành!'}
+                                    {downloadStatus === 'downloading' && 'Đang tải xuống...'}
                                   </span>
-                                  <span>{downloadProgress}%</span>
+                                  <span>{downloadProgress.toFixed(1)}%</span>
                                 </div>
                               </div>
                             </div>
@@ -645,7 +619,8 @@ const VideoDownloadPage = () => {
                                   if (event.lengthComputable) {
                                     const percentComplete = (event.loaded / event.total) * 100;
                                     console.log(`Download progress: ${percentComplete.toFixed(2)}%`);
-                                    setDownloadProgress(Math.round(percentComplete));
+                                    setDownloadProgress(percentComplete);
+                                    setDownloadStatus('downloading');
                                   }
                                 };
                                 

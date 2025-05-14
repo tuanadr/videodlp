@@ -7,7 +7,7 @@ const User = require('../models/User');
  */
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, referralCode } = req.body;
 
     // Kiểm tra xem email đã tồn tại chưa
     const existingUser = await User.findOne({ email });
@@ -24,6 +24,54 @@ exports.register = async (req, res, next) => {
       email,
       password
     });
+
+    // Xử lý mã giới thiệu nếu có
+    if (referralCode) {
+      try {
+        // Tìm người dùng có mã giới thiệu tương ứng
+        const inviter = await User.findOne({ referralCode });
+        
+        if (inviter) {
+          // Số lượt tải thưởng cho mỗi bên
+          const bonusAmount = 5;
+          
+          // Cập nhật thông tin người được mời
+          user.referredBy = inviter._id;
+          user.bonusDownloads += bonusAmount;
+          
+          // Cập nhật lịch sử giới thiệu của người được mời
+          user.referralHistory.push({
+            userId: inviter._id,
+            timestamp: Date.now(),
+            rewarded: true
+          });
+          
+          await user.save();
+          
+          // Thưởng cho người mời
+          inviter.bonusDownloads += bonusAmount;
+          
+          // Cập nhật lịch sử và thống kê giới thiệu của người mời
+          inviter.referralHistory.push({
+            userId: user._id,
+            timestamp: Date.now(),
+            rewarded: true
+          });
+          
+          inviter.referralStats.totalReferred += 1;
+          inviter.referralStats.successfulReferrals += 1;
+          
+          await inviter.save();
+          
+          console.log(`Referral successful: User ${user.email} was referred by ${inviter.email}`);
+        } else {
+          console.log(`Invalid referral code: ${referralCode}`);
+        }
+      } catch (referralError) {
+        console.error('Error processing referral code:', referralError);
+        // Không trả về lỗi, vẫn tiếp tục đăng ký
+      }
+    }
 
     sendTokenResponse(user, 201, res);
   } catch (error) {
@@ -169,7 +217,9 @@ const sendTokenResponse = (user, statusCode, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      subscription: user.subscription
+      subscription: user.subscription,
+      referralCode: user.referralCode,
+      bonusDownloads: user.bonusDownloads || 0
     }
   });
 };

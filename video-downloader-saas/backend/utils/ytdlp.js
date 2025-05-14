@@ -136,6 +136,19 @@ exports.getVideoInfo = (url) => {
               
               availableResolutions.add(resolution);
               
+              // Tính kích thước ước tính
+              let fileSizeApprox = '';
+              if (bestFormat.filesize_approx) {
+                fileSizeApprox = formatFileSize(bestFormat.filesize_approx);
+              } else if (bestFormat.filesize) {
+                fileSizeApprox = formatFileSize(bestFormat.filesize);
+              } else if (bestFormat.tbr) {
+                // Ước tính kích thước dựa trên bitrate và thời lượng
+                const durationInSeconds = videoInfo.duration || 0;
+                const fileSizeBytes = (bestFormat.tbr * 1000 * durationInSeconds) / 8;
+                fileSizeApprox = formatFileSize(fileSizeBytes);
+              }
+              
               // Tạo lựa chọn chất lượng
               qualityOptions.push({
                 label: `${resolution}p${resolution >= 2160 ? ' (4K)' : resolution >= 1440 ? ' (2K)' : resolution >= 1080 ? ' (FHD)' : resolution >= 720 ? ' (HD)' : ''}`,
@@ -145,7 +158,8 @@ exports.getVideoInfo = (url) => {
                 ext: bestFormat.ext || 'mp4',
                 height: resolution,
                 details: `MP4, Video + Âm thanh`,
-                isPremium: resolution > 720 // Định dạng premium nếu độ phân giải > 720p
+                isPremium: resolution > 720, // Định dạng premium nếu độ phân giải > 720p
+                fileSizeApprox: fileSizeApprox
               });
             });
           }
@@ -165,6 +179,24 @@ exports.getVideoInfo = (url) => {
                 console.log(`[YTDLP] Adding synthetic option for resolution: ${resolution}p`);
                 availableResolutions.add(resolution);
                 
+                // Ước tính kích thước dựa trên độ phân giải
+                let fileSizeApprox = '';
+                // Ước tính kích thước dựa trên độ phân giải và thời lượng
+                const durationInSeconds = videoInfo.duration || 0;
+                let bitrate = 0;
+                
+                // Ước tính bitrate dựa trên độ phân giải
+                if (resolution >= 2160) bitrate = 35000; // ~35 Mbps cho 4K
+                else if (resolution >= 1440) bitrate = 16000; // ~16 Mbps cho 2K
+                else if (resolution >= 1080) bitrate = 8000; // ~8 Mbps cho Full HD
+                else if (resolution >= 720) bitrate = 5000; // ~5 Mbps cho HD
+                else if (resolution >= 480) bitrate = 2500; // ~2.5 Mbps cho SD
+                else bitrate = 1500; // ~1.5 Mbps cho thấp hơn
+                
+                // Ước tính kích thước file (bitrate * thời lượng / 8 để chuyển từ bit sang byte)
+                const fileSizeBytes = (bitrate * 1000 * durationInSeconds) / 8;
+                fileSizeApprox = formatFileSize(fileSizeBytes);
+                
                 // Tạo lựa chọn chất lượng tổng hợp
                 qualityOptions.push({
                   label: `${resolution}p${resolution >= 2160 ? ' (4K)' : resolution >= 1440 ? ' (2K)' : resolution >= 1080 ? ' (FHD)' : resolution >= 720 ? ' (HD)' : ''}`,
@@ -174,7 +206,8 @@ exports.getVideoInfo = (url) => {
                   ext: 'mp4',
                   height: resolution,
                   details: `MP4, Video + Âm thanh (Tự động ghép)`,
-                  isPremium: resolution > 720 // Định dạng premium nếu độ phân giải > 720p
+                  isPremium: resolution > 720, // Định dạng premium nếu độ phân giải > 720p
+                  fileSizeApprox: fileSizeApprox
                 });
               }
             }
@@ -303,6 +336,7 @@ exports.downloadVideo = (url, formatId, outputDir) => {
       
       // Xây dựng format string chính xác để đảm bảo luôn có video và audio
       // Sử dụng cú pháp đơn giản hơn và đảm bảo luôn có cả video và audio
+      // Cải tiến format string để ưu tiên các định dạng có sẵn cả video và audio
       const formatString = `bv*[height<=${resolution}]+ba/b[height<=${resolution}]`;
       
       downloadArgs = [
@@ -314,7 +348,9 @@ exports.downloadVideo = (url, formatId, outputDir) => {
         '--force-overwrites', // Ghi đè file nếu đã tồn tại
         '--no-keep-video', // Không giữ lại file video gốc
         '--no-keep-fragments', // Không giữ lại các fragment
-        '--no-part' // Không tạo file .part
+        '--no-part', // Không tạo file .part
+        '--embed-metadata', // Nhúng metadata vào file
+        '--embed-thumbnail' // Nhúng thumbnail vào file nếu có thể
       ];
       
       console.log(`[YTDLP_DOWNLOAD_COMMAND] Using format string: ${formatString}`);

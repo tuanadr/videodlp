@@ -36,6 +36,17 @@ exports.getVideoInfo = async (req, res, next) => {
   try {
     const { url } = req.body;
     logDebug('getVideoInfo request received', { url });
+    
+    // Log thông tin chi tiết về request headers để debug
+    logDebug('Request headers', {
+      authorization: req.headers.authorization ? 'Present' : 'Missing',
+      contentType: req.headers['content-type']
+    });
+    
+    logDebug('User info', {
+      user: req.user ? `${req.user.id} (${req.user.subscription})` : 'anonymous',
+      isAuthenticated: !!req.user
+    });
 
     if (!url) {
       logDebug('URL not provided');
@@ -47,21 +58,93 @@ exports.getVideoInfo = async (req, res, next) => {
 
     logDebug('Fetching video info from ytdlp');
     const videoInfo = await ytdlp.getVideoInfo(url);
-    logDebug('Video info fetched successfully', { 
-      title: videoInfo.title, 
-      formatCount: videoInfo.formats.length 
+    logDebug('Video info fetched successfully', {
+      title: videoInfo.title,
+      formatCount: videoInfo.formats.length
     });
 
     // Lấy cài đặt hệ thống
     const settings = await getSettings();
-    logDebug('System settings loaded', { 
+    logDebug('System settings loaded', {
       maxDownloadsPerDay: settings.maxDownloadsPerDay,
       premiumPrice: settings.premiumPrice
     });
 
+    // Xác định loại người dùng
+    const userType = req.user
+      ? (req.user.subscription === 'premium' ? 'premium' : 'registered')
+      : 'anonymous';
+    
+    logDebug('User type determined', {
+      userType,
+      userId: req.user?.id,
+      subscription: req.user?.subscription
+    });
+
+    // Lọc và chuẩn bị danh sách định dạng dựa trên loại người dùng
+    const filteredFormats = videoInfo.formats.map(format => {
+      // Xác định xem định dạng có được phép cho loại người dùng này không
+      let isAllowed = true;
+      let requirement = null;
+
+      // Lấy độ phân giải từ qualityKey nếu có
+      let resolution = 0;
+      if (format.qualityKey && format.qualityKey.match(/^\d+p$/)) {
+        resolution = parseInt(format.qualityKey.replace('p', ''));
+      } else if (format.height) {
+        resolution = format.height;
+      }
+
+      // Áp dụng giới hạn dựa trên loại người dùng
+      if (userType === 'anonymous' && resolution > 720) {
+        isAllowed = false;
+        requirement = 'login';
+      } else if (userType === 'registered' && resolution > 1080) {
+        isAllowed = false;
+        requirement = 'premium';
+      }
+
+      // Trả về định dạng với thông tin bổ sung
+      return {
+        ...format,
+        isAllowed,
+        requirement
+      };
+    });
+
+    // Cập nhật thông tin video với danh sách định dạng đã lọc
+    const filteredVideoInfo = {
+      ...videoInfo,
+      formats: filteredFormats
+    };
+
+    // Cập nhật formatGroups nếu có
+    if (filteredVideoInfo.formatGroups) {
+      filteredVideoInfo.formatGroups = {
+        videoAudio: {
+          ...videoInfo.formatGroups.videoAudio,
+          formats: filteredFormats.filter(format => format.type === 'video')
+        },
+        videoOnly: {
+          ...videoInfo.formatGroups.videoOnly,
+          formats: [] // Không còn sử dụng
+        },
+        audioOnly: {
+          ...videoInfo.formatGroups.audioOnly,
+          formats: filteredFormats.filter(format => format.type === 'audio')
+        }
+      };
+    }
+
+    logDebug('Filtered formats based on user type', {
+      userType,
+      totalFormats: filteredFormats.length,
+      allowedFormats: filteredFormats.filter(f => f.isAllowed).length
+    });
+
     res.status(200).json({
       success: true,
-      data: videoInfo
+      data: filteredVideoInfo
     });
   } catch (error) {
     logDebug('Error in getVideoInfo', { error: error.message, stack: error.stack });
@@ -80,13 +163,14 @@ exports.getVideoInfo = async (req, res, next) => {
  */
 exports.downloadVideo = async (req, res, next) => {
   try {
-    const { url, formatId, title, formatType } = req.body;
+    const { url, formatId, title, formatType, qualityKey } = req.body;
     logDebug('downloadVideo request received', {
       url,
       formatId,
       title,
       formatType,
-      user: req.user ? req.user.id : 'anonymous',
+      qualityKey,
+      user: req.user ? `${req.user.id} (${req.user.subscription})` : 'anonymous',
       body: JSON.stringify(req.body)
     });
 
@@ -98,8 +182,8 @@ exports.downloadVideo = async (req, res, next) => {
       });
     }
 
-    if (!formatId) {
-      logDebug('Format ID not provided');
+    if (!formatId && !qualityKey) {
+      logDebug('Neither formatId nor qualityKey provided');
       return res.status(400).json({
         success: false,
         message: 'Vui lòng chọn định dạng video'
@@ -108,7 +192,7 @@ exports.downloadVideo = async (req, res, next) => {
 
     // Lấy cài đặt hệ thống
     const settings = await getSettings();
-    logDebug('System settings loaded', { 
+    logDebug('System settings loaded', {
       maxDownloadsPerDay: settings.maxDownloadsPerDay,
       maintenanceMode: settings.maintenanceMode
     });
@@ -122,57 +206,146 @@ exports.downloadVideo = async (req, res, next) => {
       });
     }
 
-    // Kiểm tra giới hạn tải xuống cho người dùng miễn phí
-    if (req.user && req.user.subscription === 'free') {
+    // Xác định loại người dùng
+    const userType = req.user
+      ? (req.user.subscription === 'premium' ? 'premium' : 'registered')
+      : 'anonymous';
+    
+    logDebug('User type determined', { userType });
+
+    // Kiểm tra giới hạn lượt tải dựa trên IP cho người dùng ẩn danh
+    if (userType === 'anonymous') {
+      // Lấy IP của người dùng
+      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+      logDebug('Anonymous user IP', { ip });
+      
+      // Giới hạn lượt tải cho người dùng ẩn danh (đơn giản hóa, có thể triển khai với Redis)
+      // Trong triển khai thực tế, bạn nên sử dụng Redis hoặc cơ sở dữ liệu để theo dõi
+      const anonymousLimit = 2; // Giới hạn lượt tải cho người dùng ẩn danh
+      
+      // Kiểm tra giới hạn (giả lập, cần triển khai thực tế)
+      // Trong triển khai thực tế, kiểm tra số lượt tải từ IP này trong ngày
+      const hasReachedLimit = false; // Đặt thành true để kiểm tra
+      
+      if (hasReachedLimit) {
+        logDebug('Anonymous user reached download limit', { ip });
+        return res.status(429).json({
+          success: false,
+          message: 'Bạn đã đạt giới hạn tải xuống cho người dùng không đăng nhập. Vui lòng đăng nhập để có thêm lượt tải.'
+        });
+      }
+    }
+    
+    // Kiểm tra giới hạn tải xuống cho người dùng đã đăng ký miễn phí
+    if (userType === 'registered') {
       // Reset đếm lượt tải xuống hàng ngày nếu cần
       req.user.resetDailyDownloadCount();
       
       // Kiểm tra giới hạn
       if (req.user.dailyDownloadCount >= settings.maxDownloadsPerDay) {
-        logDebug('User reached daily download limit', { 
-          userId: req.user.id, 
-          dailyCount: req.user.dailyDownloadCount, 
-          limit: settings.maxDownloadsPerDay 
+        logDebug('User reached daily download limit', {
+          userId: req.user.id,
+          dailyCount: req.user.dailyDownloadCount,
+          limit: settings.maxDownloadsPerDay,
+          bonusDownloads: req.user.bonusDownloads || 0
         });
-        return res.status(403).json({
-          success: false,
-          message: `Bạn đã đạt giới hạn tải xuống hàng ngày (${settings.maxDownloadsPerDay} video). Nâng cấp lên Premium để tải không giới hạn.`
-        });
-      }
-    }
-
-    // Kiểm tra định dạng premium cho người dùng free
-    if (req.user && req.user.subscription === 'free') {
-      try {
-        // Lấy thông tin video để kiểm tra định dạng
-        logDebug('Checking if format is premium');
-        const videoInfo = await ytdlp.getVideoInfo(url);
         
-        // Tìm định dạng được chọn
-        const selectedFormat = videoInfo.formats.find(format => format.format_id === formatId);
-        
-        if (selectedFormat) {
-          logDebug('Selected format found', { 
-            formatId, 
-            isPremium: selectedFormat.isPremium,
-            resolution: selectedFormat.resolution
+        // Kiểm tra xem người dùng có lượt tải thưởng không
+        if (req.user.bonusDownloads > 0) {
+          logDebug('User has bonus downloads available', {
+            userId: req.user.id,
+            bonusDownloads: req.user.bonusDownloads
           });
           
-          // Nếu định dạng được chọn là premium và người dùng không phải premium
-          if (selectedFormat.isPremium) {
-            logDebug('Free user trying to download premium format');
+          // Sử dụng lượt tải thưởng
+          const usedBonus = req.user.useBonusDownload();
+          
+          if (usedBonus) {
+            logDebug('Using bonus download', {
+              userId: req.user.id,
+              remainingBonus: req.user.bonusDownloads
+            });
+            
+            // Lưu thay đổi vào cơ sở dữ liệu
+            await req.user.save();
+          } else {
+            // Không thể sử dụng lượt tải thưởng (có thể do lỗi)
+            logDebug('Failed to use bonus download', { userId: req.user.id });
             return res.status(403).json({
               success: false,
-              message: 'Định dạng này chỉ dành cho người dùng Premium. Vui lòng nâng cấp hoặc chọn định dạng khác.'
+              message: `Bạn đã đạt giới hạn tải xuống hàng ngày (${settings.maxDownloadsPerDay} video) và không có lượt tải thưởng. Nâng cấp lên Premium để tải không giới hạn hoặc mời bạn bè để nhận thêm lượt tải.`
             });
           }
         } else {
-          logDebug('Selected format not found in video info', { formatId });
+          // Không có lượt tải thưởng
+          return res.status(403).json({
+            success: false,
+            message: `Bạn đã đạt giới hạn tải xuống hàng ngày (${settings.maxDownloadsPerDay} video). Nâng cấp lên Premium để tải không giới hạn hoặc mời bạn bè để nhận thêm lượt tải.`
+          });
         }
-      } catch (error) {
-        logDebug('Error when checking premium format', { error: error.message });
-        // Tiếp tục xử lý nếu không thể kiểm tra
       }
+    }
+
+    // Kiểm tra quyền tải chất lượng đã chọn
+    try {
+      // Lấy thông tin video để kiểm tra định dạng
+      logDebug('Checking if quality is allowed for user type');
+      const videoInfo = await ytdlp.getVideoInfo(url);
+      
+      // Xác định độ phân giải từ qualityKey hoặc formatId
+      let resolution = 0;
+      let selectedQualityKey = qualityKey || '';
+      
+      // Nếu có qualityKey, sử dụng nó
+      if (selectedQualityKey && selectedQualityKey.match(/^\d+p$/)) {
+        resolution = parseInt(selectedQualityKey.replace('p', ''));
+        logDebug('Resolution determined from qualityKey', { qualityKey: selectedQualityKey, resolution });
+      }
+      // Nếu không, tìm định dạng từ formatId
+      else if (formatId) {
+        const selectedFormat = videoInfo.formats.find(format => format.format_id === formatId);
+        if (selectedFormat) {
+          if (selectedFormat.qualityKey && selectedFormat.qualityKey.match(/^\d+p$/)) {
+            resolution = parseInt(selectedFormat.qualityKey.replace('p', ''));
+          } else if (selectedFormat.height) {
+            resolution = selectedFormat.height;
+          }
+          selectedQualityKey = selectedFormat.qualityKey || '';
+          logDebug('Resolution determined from formatId', {
+            formatId,
+            qualityKey: selectedQualityKey,
+            resolution
+          });
+        }
+      }
+      
+      // Kiểm tra quyền tải dựa trên độ phân giải và loại người dùng
+      let isAllowed = true;
+      
+      if (userType === 'anonymous' && resolution > 720) {
+        isAllowed = false;
+        logDebug('Anonymous user trying to download high resolution', { resolution });
+        return res.status(403).json({
+          success: false,
+          message: 'Độ phân giải này yêu cầu đăng nhập. Vui lòng đăng nhập hoặc chọn độ phân giải thấp hơn (≤ 720p).'
+        });
+      } else if (userType === 'registered' && resolution > 1080) {
+        isAllowed = false;
+        logDebug('Free user trying to download premium resolution', { resolution });
+        return res.status(403).json({
+          success: false,
+          message: 'Độ phân giải này chỉ dành cho người dùng Premium. Vui lòng nâng cấp hoặc chọn độ phân giải thấp hơn (≤ 1080p).'
+        });
+      }
+      
+      logDebug('Quality check result', {
+        userType,
+        resolution,
+        isAllowed
+      });
+    } catch (error) {
+      logDebug('Error when checking quality permissions', { error: error.message });
+      // Tiếp tục xử lý nếu không thể kiểm tra
     }
 
     // Lấy thông tin video nếu không có tiêu đề
@@ -233,8 +406,38 @@ exports.downloadVideo = async (req, res, next) => {
         console.log(`[VIDEO_DOWNLOAD] Starting background download process for video ID: ${video._id}`);
         console.log(`[VIDEO_DOWNLOAD] Format ID: ${formatId}, URL: ${url}, Quality: ${formatId.match(/^\d+p$/) ? formatId : 'custom'}`);
         
+        // Cập nhật tiến trình ban đầu
+        await Video.findByIdAndUpdate(video._id, { progress: 5 });
+        
+        // Tạo hàm cập nhật tiến trình
+        const updateProgress = async (progress) => {
+          try {
+            await Video.findByIdAndUpdate(video._id, { progress });
+            console.log(`[VIDEO_DOWNLOAD] Updated progress for video ${video._id}: ${progress}%`);
+          } catch (error) {
+            console.error(`[VIDEO_DOWNLOAD] Error updating progress: ${error.message}`);
+          }
+        };
+        
+        // Thiết lập interval để cập nhật tiến trình
+        let currentProgress = 5;
+        const progressInterval = setInterval(async () => {
+          if (currentProgress < 80) {
+            currentProgress += Math.floor(Math.random() * 5) + 1; // Tăng tiến trình ngẫu nhiên từ 1-5%
+            if (currentProgress > 80) currentProgress = 80; // Giới hạn ở 80% cho đến khi hoàn thành
+            await updateProgress(currentProgress);
+          }
+        }, 2000); // Cập nhật mỗi 2 giây
+        
         // Tải video
         const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir);
+        
+        // Dừng cập nhật tiến trình
+        clearInterval(progressInterval);
+        
+        // Cập nhật tiến trình lên 90% (đã tải xong, đang xử lý file)
+        await updateProgress(90);
+        
         logDebug('Download completed', { downloadPath });
         console.log(`[VIDEO_DOWNLOAD] Download completed. File path: ${downloadPath}`);
         
@@ -373,6 +576,7 @@ exports.downloadVideo = async (req, res, next) => {
           downloadPath: downloadPath,
           fileSize: stats.size,
           fileType: safeFileType,
+          progress: 100, // Đặt tiến trình là 100% khi hoàn thành
           // Đặt thời gian hết hạn dựa trên gói đăng ký
           expiresAt: req.user && req.user.subscription === 'premium'
             ? new Date(Date.now() + settings.premiumStorageDays * 24 * 60 * 60 * 1000)
@@ -416,8 +620,10 @@ exports.downloadVideo = async (req, res, next) => {
           error: error.message, 
           stack: error.stack 
         });
+        // Cập nhật trạng thái thất bại và đặt tiến trình về 0
         await Video.findByIdAndUpdate(video._id, {
           status: 'failed',
+          progress: 0,
           error: error.message
         });
       }
@@ -489,6 +695,36 @@ exports.getVideoStatus = async (req, res, next) => {
       title: video.title 
     });
     
+    // Tính toán tiến trình dựa trên trạng thái
+    let progress = 0;
+    
+    if (video.status === 'completed') {
+      progress = 100;
+    } else if (video.status === 'processing') {
+      // Nếu đang xử lý, ước tính tiến trình dựa trên thời gian đã trôi qua
+      const startTime = new Date(video.createdAt).getTime();
+      const currentTime = new Date().getTime();
+      const elapsedTime = currentTime - startTime;
+      
+      // Ước tính tiến trình dựa trên thời gian đã trôi qua (giả sử quá trình tải mất khoảng 30 giây)
+      const estimatedDuration = 30000; // 30 giây
+      progress = Math.min(Math.floor((elapsedTime / estimatedDuration) * 80), 80); // Giới hạn ở 80% cho đến khi hoàn thành
+    } else if (video.status === 'pending') {
+      // Nếu đang chờ, đặt tiến trình ở mức thấp
+      progress = 5;
+    }
+    
+    // Nếu có trường progress trong video, sử dụng nó thay vì ước tính
+    if (video.progress !== undefined) {
+      progress = video.progress;
+    }
+    
+    logDebug('Calculated progress', {
+      videoId: video._id,
+      status: video.status,
+      progress
+    });
+    
     res.status(200).json({
       success: true,
       data: {
@@ -499,7 +735,8 @@ exports.getVideoStatus = async (req, res, next) => {
         downloadPath: video.downloadPath,
         createdAt: video.createdAt,
         expiresAt: video.expiresAt,
-        error: video.error
+        error: video.error,
+        progress: progress
       }
     });
   } catch (error) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import axios from 'axios';
 import { loadStripe } from '@stripe/stripe-js';
 
@@ -8,6 +9,7 @@ const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY || 'pk_
 
 const SubscriptionPage = () => {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -258,15 +260,15 @@ const SubscriptionPage = () => {
                     Bạn đang sử dụng gói Miễn phí với các giới hạn sau:
                   </p>
                   <ul className="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-                    <li>Tải tối đa 3 video mỗi ngày</li>
+                    <li>Tải tối đa {settings.maxDownloadsPerDay} video mỗi ngày</li>
                     <li>Chất lượng video cơ bản</li>
-                    <li>Lưu trữ video 1 ngày</li>
+                    <li>Lưu trữ video {settings.freeStorageDays} ngày</li>
                   </ul>
                 </div>
 
                 <div className="border-t border-gray-200 pt-6">
                   <h3 className="text-lg leading-6 font-medium text-gray-900">
-                    Gói Premium: <span className="text-primary-600">99.000đ/tháng</span>
+                    Gói Premium: <span className="text-primary-600">{settings.premiumPrice.toLocaleString()}đ/tháng</span>
                   </h3>
                   <p className="mt-2 text-sm text-gray-500">
                     Nâng cấp lên Premium để có trải nghiệm tốt nhất:
@@ -274,7 +276,7 @@ const SubscriptionPage = () => {
                   <ul className="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
                     <li>Tải video không giới hạn</li>
                     <li>Chọn định dạng và chất lượng video</li>
-                    <li>Lưu trữ video 7 ngày</li>
+                    <li>Lưu trữ video {settings.premiumStorageDays} ngày</li>
                     <li>Không có quảng cáo</li>
                   </ul>
                 </div>

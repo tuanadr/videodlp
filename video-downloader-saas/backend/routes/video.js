@@ -18,7 +18,7 @@ const router = express.Router();
 
 // Routes công khai
 router.get('/supported-sites', getSupportedSites);
-router.post('/info', getVideoInfo);
+router.post('/info', optionalAuth, getVideoInfo);
 
 // Route tải video - cho phép tải không cần đăng nhập (nhưng có giới hạn)
 // Áp dụng rate limiting cho API tải video (sau khi xác thực để kiểm tra admin)

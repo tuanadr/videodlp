@@ -19,6 +19,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import PaymentCancelPage from './pages/PaymentCancelPage';
 import SupportedSitesPage from './pages/SupportedSitesPage';
+import ReferralPage from './pages/ReferralPage';
 
 // Admin Pages
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
@@ -85,6 +86,7 @@ function App() {
         <Route path="download" element={<VideoDownloadPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="subscription" element={<SubscriptionPage />} />
+        <Route path="referrals" element={<ReferralPage />} />
       </Route>
 
       {/* Admin Routes */}

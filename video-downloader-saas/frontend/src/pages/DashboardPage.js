@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import ReferralWidget from '../components/dashboard/ReferralWidget';
 
 const DashboardPage = () => {
   const { user } = useAuth();
@@ -113,6 +114,9 @@ const DashboardPage = () => {
             </dl>
           </div>
         </div>
+
+        {/* Widget giới thiệu */}
+        <ReferralWidget />
 
         {/* Danh sách video đã tải */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">

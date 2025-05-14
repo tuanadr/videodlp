@@ -153,6 +153,70 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Áp dụng mã giới thiệu
+  const applyReferralCode = async (referralCode) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const res = await axios.post('/api/referrals/apply', { referralCode });
+      
+      // Cập nhật thông tin người dùng với lượt tải thưởng mới
+      setUser({
+        ...user,
+        bonusDownloads: res.data.data.bonusDownloads
+      });
+      
+      return res.data;
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+        'Đã xảy ra lỗi khi áp dụng mã giới thiệu. Vui lòng thử lại.'
+      );
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Lấy thống kê giới thiệu
+  const getReferralStats = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const res = await axios.get('/api/referrals/stats');
+      return res.data.data;
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+        'Đã xảy ra lỗi khi lấy thống kê giới thiệu. Vui lòng thử lại.'
+      );
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Lấy mã giới thiệu
+  const getReferralCode = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const res = await axios.get('/api/referrals/code');
+      return res.data.data;
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+        'Đã xảy ra lỗi khi lấy mã giới thiệu. Vui lòng thử lại.'
+      );
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value = {
     user,
     token,
@@ -163,7 +227,10 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     updateProfile,
-    updatePassword
+    updatePassword,
+    applyReferralCode,
+    getReferralStats,
+    getReferralCode
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

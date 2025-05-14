@@ -211,26 +211,29 @@ const AdminDashboardPage = () => {
                       <div className="text-sm font-medium text-gray-500">
                         {new Date(day.date).toLocaleDateString('vi-VN', { weekday: 'short' })}
                       </div>
-                      <div className="mt-1 relative pt-1 flex flex-col items-center">
+                      <div className="mt-1 flex flex-col items-center space-y-4">
+                        {/* Video stats */}
                         <div className="flex flex-col items-center">
-                          <div className="w-full bg-blue-200 rounded-full h-24 relative">
+                          <div className="w-16 bg-blue-200 rounded-md">
                             <div
-                              className="bg-blue-600 h-full rounded-full"
+                              className="bg-blue-600 rounded-md"
                               style={{
-                                height: `${Math.min(100, (day.videos / Math.max(...stats.dailyStats.map(d => d.videos))) * 100)}%`,
-                                minHeight: day.videos > 0 ? '10%' : '0'
+                                height: `${Math.max(4, Math.min(96, (day.videos / Math.max(1, ...stats.dailyStats.map(d => d.videos))) * 96))}px`,
+                                minHeight: day.videos > 0 ? '4px' : '0'
                               }}
                             ></div>
                           </div>
                           <span className="text-xs font-medium text-gray-700 mt-1">{day.videos} video</span>
                         </div>
-                        <div className="flex flex-col items-center ml-2">
-                          <div className="w-full bg-green-200 rounded-full h-24 relative">
+                        
+                        {/* User stats */}
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 bg-green-200 rounded-md">
                             <div
-                              className="bg-green-600 h-full rounded-full"
+                              className="bg-green-600 rounded-md"
                               style={{
-                                height: `${Math.min(100, (day.users / Math.max(...stats.dailyStats.map(d => d.users))) * 100)}%`,
-                                minHeight: day.users > 0 ? '10%' : '0'
+                                height: `${Math.max(4, Math.min(96, (day.users / Math.max(1, ...stats.dailyStats.map(d => d.users))) * 96))}px`,
+                                minHeight: day.users > 0 ? '4px' : '0'
                               }}
                             ></div>
                           </div>

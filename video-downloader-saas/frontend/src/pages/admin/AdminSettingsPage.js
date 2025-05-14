@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useSettings } from '../../context/SettingsContext';
 
 const AdminSettingsPage = () => {
+  const { settings: globalSettings, updateSettings: updateGlobalSettings, loading: globalLoading } = useSettings();
   const [settings, setSettings] = useState({
     maxDownloadsPerDay: 3,
     premiumPrice: 99000,
@@ -9,7 +11,8 @@ const AdminSettingsPage = () => {
     freeStorageDays: 1,
     maintenanceMode: false,
     allowedFormats: ['mp4', 'webm', 'mp3', 'm4a'],
-    maxFileSize: 1024 * 1024 * 1024 // 1GB
+    maxFileSize: 1024 * 1024 * 1024, // 1GB
+    referralBonusDownloads: 5 // Số lượt tải thưởng cho mỗi lần giới thiệu
   });
   
   const [loading, setLoading] = useState(true);
@@ -79,7 +82,12 @@ const AdminSettingsPage = () => {
     
     try {
       setSaving(true);
+      
+      // Cập nhật cài đặt trong backend
       await axios.put('/api/admin/settings', settings);
+      
+      // Cập nhật cài đặt trong context toàn cục
+      await updateGlobalSettings(settings);
       
       setSuccessMessage('Cài đặt đã được lưu thành công');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -255,6 +263,26 @@ const AdminSettingsPage = () => {
                 </div>
                 <p className="mt-2 text-sm text-gray-500">
                   Kích thước tối đa của file video được phép tải xuống.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="referralBonusDownloads" className="block text-sm font-medium text-gray-700">
+                  Lượt tải thưởng khi giới thiệu
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="number"
+                    name="referralBonusDownloads"
+                    id="referralBonusDownloads"
+                    min="1"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.referralBonusDownloads}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Số lượt tải thưởng khi người dùng giới thiệu thành công một người dùng mới.
                 </p>
               </div>
 

@@ -102,6 +102,14 @@ const Navbar = () => {
                     >
                       Gói đăng ký
                     </Link>
+                    <Link
+                      to="/dashboard/referrals"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      role="menuitem"
+                      onClick={() => setIsProfileOpen(false)}
+                    >
+                      Mời bạn bè
+                    </Link>
                     <button
                       onClick={() => {
                         setIsProfileOpen(false);
@@ -238,6 +246,13 @@ const Navbar = () => {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Gói đăng ký
+              </Link>
+              <Link
+                to="/dashboard/referrals"
+                className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Mời bạn bè
               </Link>
               <button
                 onClick={() => {

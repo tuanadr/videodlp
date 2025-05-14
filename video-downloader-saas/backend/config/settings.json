@@ -1,7 +1,7 @@
 {
   "maxDownloadsPerDay": 10,
-  "premiumPrice": 98000,
-  "premiumStorageDays": 7,
+  "premiumPrice": 199000,
+  "premiumStorageDays": 3,
   "freeStorageDays": 1,
   "maintenanceMode": false,
   "allowedFormats": [
@@ -11,5 +11,5 @@
     "m4a"
   ],
   "maxFileSize": 1073741824,
-  "updatedAt": "2025-05-14T10:03:34.486Z"
+  "updatedAt": "2025-05-14T13:30:35.475Z"
 }

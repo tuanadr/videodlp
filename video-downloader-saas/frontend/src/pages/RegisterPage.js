@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const RegisterPage = () => {
@@ -7,14 +7,30 @@ const RegisterPage = () => {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    referralCode: ''
   });
+  
+  const location = useLocation();
+  
+  // Lấy mã giới thiệu từ query params (nếu có)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const ref = params.get('ref');
+    
+    if (ref) {
+      setFormData(prevState => ({
+        ...prevState,
+        referralCode: ref
+      }));
+    }
+  }, [location.search]);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register, error } = useAuth();
   const navigate = useNavigate();
 
-  const { name, email, password, confirmPassword } = formData;
+  const { name, email, password, confirmPassword, referralCode } = formData;
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -65,7 +81,7 @@ const RegisterPage = () => {
     setIsSubmitting(true);
     
     try {
-      await register({ name, email, password });
+      await register({ name, email, password, referralCode });
       navigate('/dashboard');
     } catch (error) {
       console.error('Lỗi đăng ký:', error);
@@ -168,9 +184,30 @@ const RegisterPage = () => {
               <p className="mt-1 text-sm text-red-600">{formErrors.confirmPassword}</p>
             )}
           </div>
+          
+          {/* Thêm trường nhập mã giới thiệu */}
+          <div className="mt-4">
+            <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700">
+              Mã giới thiệu (không bắt buộc)
+            </label>
+            <div className="mt-1">
+              <input
+                id="referralCode"
+                name="referralCode"
+                type="text"
+                value={referralCode}
+                onChange={handleChange}
+                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                placeholder="Nhập mã giới thiệu nếu có"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Nhập mã giới thiệu để nhận 5 lượt tải thưởng
+            </p>
+          </div>
         </div>
 
-        <div>
+        <div className="mt-6">
           <button
             type="submit"
             disabled={isSubmitting}

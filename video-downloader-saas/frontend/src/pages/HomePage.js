@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useSettings } from '../context/SettingsContext';
 
 const HomePage = () => {
+  const { settings } = useSettings();
   return (
     <div>
       {/* Hero Section */}
@@ -133,7 +135,7 @@ const HomePage = () => {
                     <svg className="flex-shrink-0 h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-gray-500">Tải tối đa 3 video mỗi ngày</span>
+                    <span className="text-gray-500">Tải tối đa {settings.maxDownloadsPerDay} video mỗi ngày</span>
                   </li>
                   <li className="flex space-x-3">
                     <svg className="flex-shrink-0 h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -145,7 +147,7 @@ const HomePage = () => {
                     <svg className="flex-shrink-0 h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-gray-500">Lưu trữ video 1 ngày</span>
+                    <span className="text-gray-500">Lưu trữ video {settings.freeStorageDays} ngày</span>
                   </li>
                   <li className="flex space-x-3">
                     <svg className="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -168,7 +170,7 @@ const HomePage = () => {
               <div className="flex-1">
                 <h3 className="text-xl font-semibold text-gray-900">Premium</h3>
                 <p className="mt-4 flex items-baseline text-gray-900">
-                  <span className="text-5xl font-extrabold tracking-tight">99.000đ</span>
+                  <span className="text-5xl font-extrabold tracking-tight">{settings.premiumPrice.toLocaleString()}đ</span>
                   <span className="ml-1 text-xl font-semibold">/tháng</span>
                 </p>
                 <p className="mt-6 text-gray-500">
@@ -192,7 +194,7 @@ const HomePage = () => {
                     <svg className="flex-shrink-0 h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-gray-500">Lưu trữ video 7 ngày</span>
+                    <span className="text-gray-500">Lưu trữ video {settings.premiumStorageDays} ngày</span>
                   </li>
                   <li className="flex space-x-3">
                     <svg className="flex-shrink-0 h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
