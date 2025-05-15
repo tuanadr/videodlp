@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { SupportedSitesProvider } from './context/SupportedSitesContext'; // Import SupportedSitesProvider
 
 // Layouts
 import MainLayout from './components/layouts/MainLayout';
@@ -74,9 +75,10 @@ const AdminRoute = ({ children }) => {
 
 function App() {
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<MainLayout />}>
+    <SupportedSitesProvider> {/* Wrap Routes with SupportedSitesProvider */}
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<MainLayout />}>
         <Route index element={<HomePage />} />
         <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
         <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
@@ -119,9 +121,10 @@ function App() {
         <Route path="cancel" element={<PaymentCancelPage />} />
       </Route>
 
-      {/* 404 Route */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+        {/* 404 Route */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </SupportedSitesProvider> // Close SupportedSitesProvider
   );
 }
 

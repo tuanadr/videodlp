@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react'; // Import useContext
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSupportedSites } from '../../context/SupportedSitesContext'; // Import useSupportedSites
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
+  const { sites: supportedSites, loading: sitesLoading } = useSupportedSites(); // Use SupportedSitesContext
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -36,6 +38,11 @@ const Navbar = () => {
                 className="border-transparent text-gray-500 hover:border-primary-500 hover:text-primary-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
               >
                 Trang web hỗ trợ
+                {!sitesLoading && supportedSites && supportedSites.length > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                    {supportedSites.length}
+                  </span>
+                )}
               </Link>
               <div 
                 className="relative inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium"

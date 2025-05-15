@@ -1,37 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useContext } from 'react'; // Added useContext
+// import axios from 'axios'; // No longer needed for direct fetching
 import { Link } from 'react-router-dom';
+import { useSupportedSites } from '../context/SupportedSitesContext'; // Import useSupportedSites
 
 const SupportedSitesPage = () => {
-  const [sites, setSites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { sites, loading, error } = useSupportedSites(); // Use context, removed fetchSites as it's not needed from context here
   const [searchTerm, setSearchTerm] = useState('');
   const [groupedSites, setGroupedSites] = useState({});
   const [activeGroup, setActiveGroup] = useState('all');
 
   useEffect(() => {
-    const fetchSupportedSites = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get('/api/videos/supported-sites');
-        setSites(res.data.data);
-        
-        // Nhóm các trang web theo chữ cái đầu tiên
-        groupSitesByFirstLetter(res.data.data);
-      } catch (err) {
-        console.error('Lỗi khi lấy danh sách trang web được hỗ trợ:', err);
-        setError('Không thể lấy danh sách trang web được hỗ trợ. Vui lòng thử lại sau.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSupportedSites();
-  }, []);
+    // Dữ liệu sites đã được fetch bởi context, chỉ cần nhóm lại khi sites thay đổi
+    if (sites && sites.length > 0) {
+      groupSitesByFirstLetter(sites);
+    } else if (!loading && sites.length === 0 && !error) { // Handle empty but successful fetch
+      setGroupedSites({});
+    }
+  }, [sites, loading, error]); // Phụ thuộc vào sites, loading, error từ context
 
   // Nhóm các trang web theo chữ cái đầu tiên
   const groupSitesByFirstLetter = (sitesList) => {
+    if (!sitesList) return; // Guard clause
     const groups = {};
     
     sitesList.forEach(site => {
