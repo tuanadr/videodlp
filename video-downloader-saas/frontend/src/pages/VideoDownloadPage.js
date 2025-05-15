@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -26,7 +26,7 @@ const VideoDownloadPage = () => {
   const [selectedSubtitle, setSelectedSubtitle] = useState(null);
   const [subtitleError, setSubtitleError] = useState(null);
 
-  const handleUrlChange = (e) => {
+  const handleUrlChange = useCallback((e) => {
     setUrl(e.target.value);
     // Reset state khi URL thay đổi
     setVideoInfo(null);
@@ -35,9 +35,9 @@ const VideoDownloadPage = () => {
     setDownloadStatus(null);
     setVideoId(null);
     setCurrentFormatType('video'); // Reset về video
-  };
+  }, []);
 
-  const handleGetInfo = async (e) => {
+  const handleGetInfo = useCallback(async (e) => {
     e.preventDefault();
     
     if (!url) {
@@ -108,15 +108,15 @@ const VideoDownloadPage = () => {
     } catch (error) {
       console.error('Lỗi khi lấy thông tin video:', error);
       setError(
-        error.response?.data?.message || 
+        error.response?.data?.message ||
         'Không thể lấy thông tin video. Vui lòng kiểm tra URL và thử lại.'
       );
     } finally {
       setLoading(false);
     }
-  };
+  }, [url]);
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     if (!url) {
       setError('Vui lòng nhập URL video');
       return;
@@ -169,15 +169,15 @@ const VideoDownloadPage = () => {
         console.error('Error status:', error.response.status);
       }
       setError(
-        error.response?.data?.message || 
+        error.response?.data?.message ||
         'Không thể tải video. Vui lòng thử lại sau.'
       );
       setDownloadStatus('failed');
       setLoading(false);
     }
-  };
+  }, [url, selectedFormat, videoInfo, currentFormatType]);
 
-  const checkDownloadStatus = async (id) => {
+  const checkDownloadStatus = useCallback(async (id) => {
     try {
       const res = await axios.get(`/api/videos/${id}/status`);
       const status = res.data.data.status;
@@ -214,7 +214,7 @@ const VideoDownloadPage = () => {
       setDownloadStatus('failed');
       setLoading(false);
     }
-  };
+  }, []);
 
   // Không cần hàm handleStreamVideo nữa vì chúng ta sẽ sử dụng thẻ <a> trực tiếp
 
@@ -234,14 +234,30 @@ const VideoDownloadPage = () => {
   };
 
   // Kiểm tra xem format có phải là premium không
-  const isFormatPremium = (format) => {
+  const isFormatPremium = useCallback((format) => {
     return format.isPremium && user?.subscription !== 'premium';
-  };
+  }, [user?.subscription]);
 
   // Kiểm tra xem format có được chọn không
-  const isFormatSelected = (formatId) => {
+  const isFormatSelected = useCallback((formatId) => {
     return selectedFormat === formatId;
-  };
+  }, [selectedFormat]);
+  
+  // Tính toán danh sách formats đã được lọc
+  const filteredFormats = useMemo(() => {
+    if (!videoInfo || !videoInfo.formats) return [];
+    
+    return videoInfo.formats
+      .filter(format =>
+        activeTab === 'videoAudio'
+          ? format.type === 'video'
+          : format.type === 'audio'
+      )
+      .map((format) => ({
+        ...format,
+        isSelected: selectedFormat === format.format_id
+      }));
+  }, [videoInfo, activeTab, selectedFormat]);
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
@@ -357,7 +373,14 @@ const VideoDownloadPage = () => {
                     <img
                       src={videoInfo.thumbnail}
                       alt={videoInfo.title}
+                      width="320"
+                      height="180"
+                      loading="lazy"
                       className="w-full md:w-64 h-auto rounded-lg shadow-sm"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/placeholder-thumbnail.jpg';
+                      }}
                     />
                   </div>
                 )}
@@ -445,64 +468,58 @@ const VideoDownloadPage = () => {
                           <h5 className="text-sm font-medium text-gray-700 mb-3">Chọn chất lượng</h5>
                           
                           <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                            {videoInfo.formats
-                              .filter(format =>
-                                activeTab === 'videoAudio'
-                                  ? format.type === 'video'
-                                  : format.type === 'audio'
-                              )
-                              .map((format) => (
-                                <div
-                                  key={format.qualityKey}
-                                  className={`flex items-center p-2 rounded-md ${
-                                    isFormatSelected(format.format_id)
-                                      ? 'bg-primary-50 border border-primary-200'
-                                      : 'bg-white border border-gray-200 hover:bg-gray-50'
-                                  } ${
-                                    !format.isAllowed ? 'opacity-60' : ''
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    id={`format-${format.qualityKey}`}
-                                    name="format"
-                                    value={format.format_id}
-                                    checked={isFormatSelected(format.format_id)}
-                                    onChange={() => {
-                                      // Khi chọn một định dạng mới, reset trạng thái tải xuống
-                                      setSelectedFormat(format.format_id);
-                                      setDownloadStatus(null);
-                                      setVideoId(null);
-                                      setDownloadProgress(0);
-                                      setError(null);
-                                    }}
-                                    disabled={!format.isAllowed}
-                                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
-                                  />
-                                  <label htmlFor={`format-${format.qualityKey}`} className="ml-3 block text-sm font-medium text-gray-900 flex-grow">
-                                    <div className="flex flex-col">
-                                      <div className="flex items-center">
-                                        {format.label}
-                                        {!format.isAllowed && format.requirement === 'premium' && (
-                                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                                            Premium
-                                          </span>
-                                        )}
-                                        {!format.isAllowed && format.requirement === 'login' && (
-                                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                            Cần đăng nhập
-                                          </span>
-                                        )}
-                                      </div>
-                                      {format.fileSizeApprox && (
-                                        <span className="text-xs text-gray-500 mt-1">
-                                          Kích thước ước tính: {format.fileSizeApprox}
+                            {filteredFormats.map((format) => (
+                              <div
+                                key={format.qualityKey}
+                                className={`flex items-center p-2 rounded-md ${
+                                  isFormatSelected(format.format_id)
+                                    ? 'bg-primary-50 border border-primary-200'
+                                    : 'bg-white border border-gray-200 hover:bg-gray-50'
+                                } ${
+                                  !format.isAllowed ? 'opacity-60' : ''
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  id={`format-${format.qualityKey}`}
+                                  name="format"
+                                  value={format.format_id}
+                                  checked={isFormatSelected(format.format_id)}
+                                  onChange={() => {
+                                    // Khi chọn một định dạng mới, reset trạng thái tải xuống
+                                    setSelectedFormat(format.format_id);
+                                    setDownloadStatus(null);
+                                    setVideoId(null);
+                                    setDownloadProgress(0);
+                                    setError(null);
+                                  }}
+                                  disabled={!format.isAllowed}
+                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                                />
+                                <label htmlFor={`format-${format.qualityKey}`} className="ml-3 block text-sm font-medium text-gray-900 flex-grow">
+                                  <div className="flex flex-col">
+                                    <div className="flex items-center">
+                                      {format.label}
+                                      {!format.isAllowed && format.requirement === 'premium' && (
+                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                          Premium
+                                        </span>
+                                      )}
+                                      {!format.isAllowed && format.requirement === 'login' && (
+                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                          Cần đăng nhập
                                         </span>
                                       )}
                                     </div>
-                                  </label>
-                                </div>
-                              ))}
+                                    {format.fileSizeApprox && (
+                                      <span className="text-xs text-gray-500 mt-1">
+                                        Kích thước ước tính: {format.fileSizeApprox}
+                                      </span>
+                                    )}
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
                           </div>
                           
                           {!user && videoInfo.formats.some(f => !f.isAllowed && f.requirement === 'login') && (
@@ -571,6 +588,13 @@ const VideoDownloadPage = () => {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('GET', `/api/videos/${videoId}/download`, true);
                                 xhr.responseType = 'blob';
+                                
+                                // Thêm token xác thực vào header
+                                const token = localStorage.getItem('token');
+                                if (token) {
+                                  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                                  console.log('Adding auth token to download request');
+                                }
                                 
                                 xhr.onload = function() {
                                   if (this.status === 200) {

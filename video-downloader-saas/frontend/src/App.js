@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { SupportedSitesProvider } from './context/SupportedSitesContext'; // Import SupportedSitesProvider
@@ -8,32 +8,41 @@ import MainLayout from './components/layouts/MainLayout';
 import AuthLayout from './components/layouts/AuthLayout';
 import AdminLayout from './components/layouts/AdminLayout';
 
-// Pages
+// Eagerly loaded pages (core functionality)
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
 import VideoDownloadPage from './pages/VideoDownloadPage';
-import ProfilePage from './pages/ProfilePage';
-import SubscriptionPage from './pages/SubscriptionPage';
 import NotFoundPage from './pages/NotFoundPage';
-import PaymentSuccessPage from './pages/PaymentSuccessPage';
-import PaymentCancelPage from './pages/PaymentCancelPage';
-import SupportedSitesPage from './pages/SupportedSitesPage';
-import ReferralPage from './pages/ReferralPage';
 
-// Downloader Pages
-import YouTubeDownloaderPage from './pages/downloaders/YouTubeDownloaderPage';
-import FacebookDownloaderPage from './pages/downloaders/FacebookDownloaderPage';
-import TikTokDownloaderPage from './pages/downloaders/TikTokDownloaderPage';
-import InstagramDownloaderPage from './pages/downloaders/InstagramDownloaderPage';
-import SoundCloudDownloaderPage from './pages/downloaders/SoundCloudDownloaderPage';
+// Lazy loaded pages
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
+const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
+const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
+const SupportedSitesPage = lazy(() => import('./pages/SupportedSitesPage'));
+const ReferralPage = lazy(() => import('./pages/ReferralPage'));
 
-// Admin Pages
-import AdminDashboardPage from './pages/admin/AdminDashboardPage';
-import AdminUsersPage from './pages/admin/AdminUsersPage';
-import AdminVideosPage from './pages/admin/AdminVideosPage';
-import AdminSettingsPage from './pages/admin/AdminSettingsPage';
+// Lazy loaded downloader pages
+const YouTubeDownloaderPage = lazy(() => import('./pages/downloaders/YouTubeDownloaderPage'));
+const FacebookDownloaderPage = lazy(() => import('./pages/downloaders/FacebookDownloaderPage'));
+const TikTokDownloaderPage = lazy(() => import('./pages/downloaders/TikTokDownloaderPage'));
+const InstagramDownloaderPage = lazy(() => import('./pages/downloaders/InstagramDownloaderPage'));
+const SoundCloudDownloaderPage = lazy(() => import('./pages/downloaders/SoundCloudDownloaderPage'));
+
+// Lazy loaded admin pages
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
+const AdminVideosPage = lazy(() => import('./pages/admin/AdminVideosPage'));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
+
+// Loading component for Suspense
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+  </div>
+);
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -79,16 +88,40 @@ function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<MainLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
-        <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
-        <Route path="supported-sites" element={<SupportedSitesPage />} />
-        <Route path="tai-video-youtube" element={<YouTubeDownloaderPage />} />
-        <Route path="tai-video-facebook" element={<FacebookDownloaderPage />} />
-        <Route path="tai-video-tiktok" element={<TikTokDownloaderPage />} />
-        <Route path="tai-video-instagram" element={<InstagramDownloaderPage />} />
-        <Route path="tai-nhac-soundcloud" element={<SoundCloudDownloaderPage />} />
-      </Route>
+          <Route index element={<HomePage />} />
+          <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
+          <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
+          <Route path="supported-sites" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <SupportedSitesPage />
+            </Suspense>
+          } />
+          <Route path="tai-video-youtube" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <YouTubeDownloaderPage />
+            </Suspense>
+          } />
+          <Route path="tai-video-facebook" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <FacebookDownloaderPage />
+            </Suspense>
+          } />
+          <Route path="tai-video-tiktok" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <TikTokDownloaderPage />
+            </Suspense>
+          } />
+          <Route path="tai-video-instagram" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <InstagramDownloaderPage />
+            </Suspense>
+          } />
+          <Route path="tai-nhac-soundcloud" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <SoundCloudDownloaderPage />
+            </Suspense>
+          } />
+        </Route>
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={
@@ -96,11 +129,27 @@ function App() {
           <MainLayout />
         </ProtectedRoute>
       }>
-        <Route index element={<DashboardPage />} />
+        <Route index element={
+          <Suspense fallback={<LoadingFallback />}>
+            <DashboardPage />
+          </Suspense>
+        } />
         <Route path="download" element={<VideoDownloadPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="subscription" element={<SubscriptionPage />} />
-        <Route path="referrals" element={<ReferralPage />} />
+        <Route path="profile" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <ProfilePage />
+          </Suspense>
+        } />
+        <Route path="subscription" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <SubscriptionPage />
+          </Suspense>
+        } />
+        <Route path="referrals" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <ReferralPage />
+          </Suspense>
+        } />
       </Route>
 
       {/* Admin Routes */}
@@ -109,16 +158,40 @@ function App() {
           <AdminLayout />
         </AdminRoute>
       }>
-        <Route index element={<AdminDashboardPage />} />
-        <Route path="users" element={<AdminUsersPage />} />
-        <Route path="videos" element={<AdminVideosPage />} />
-        <Route path="settings" element={<AdminSettingsPage />} />
+        <Route index element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminDashboardPage />
+          </Suspense>
+        } />
+        <Route path="users" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminUsersPage />
+          </Suspense>
+        } />
+        <Route path="videos" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminVideosPage />
+          </Suspense>
+        } />
+        <Route path="settings" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminSettingsPage />
+          </Suspense>
+        } />
       </Route>
 
       {/* Payment Routes */}
       <Route path="/payment" element={<MainLayout />}>
-        <Route path="success" element={<PaymentSuccessPage />} />
-        <Route path="cancel" element={<PaymentCancelPage />} />
+        <Route path="success" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <PaymentSuccessPage />
+          </Suspense>
+        } />
+        <Route path="cancel" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <PaymentCancelPage />
+          </Suspense>
+        } />
       </Route>
 
         {/* 404 Route */}

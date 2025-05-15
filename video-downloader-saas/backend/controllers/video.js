@@ -4,6 +4,8 @@ const Video = require('../models/Video');
 const User = require('../models/User');
 const ytdlp = require('../utils/ytdlp');
 const { getSettings } = require('../utils/settings');
+const { addVideoJob, isRedisAvailable } = require('../utils/queue');
+const { clearCache } = require('../middleware/cache');
 
 const DOWNLOAD_DIR = path.join(__dirname, '../downloads');
 const SUBTITLE_DIR = path.join(DOWNLOAD_DIR, 'subtitles');
@@ -175,7 +177,7 @@ exports.downloadVideo = async (req, res, next) => {
       }
     }
     
-    const videoInfoForPermissionCheck = await ytdlp.getVideoInfo(url); 
+    const videoInfoForPermissionCheck = await ytdlp.getVideoInfo(url);
     const selectedFormatDetails = videoInfoForPermissionCheck.formats.find(f => f.format_id === formatId);
 
     if (!selectedFormatDetails) {
@@ -193,7 +195,7 @@ exports.downloadVideo = async (req, res, next) => {
     }
 
 
-    let isFormatAllowedForUser = false; 
+    let isFormatAllowedForUser = false;
     const isTikTok = url.includes('tiktok.com');
 
     if (userType === 'premium') {
@@ -226,69 +228,78 @@ exports.downloadVideo = async (req, res, next) => {
 
     let videoTitle = title || videoInfoForPermissionCheck.title || 'Untitled Video';
 
+    // Tạo bản ghi video với trạng thái 'pending'
     const video = await Video.create({
       title: videoTitle,
       url: url,
       formatId: formatId,
-      status: 'processing',
-      user: userId,
+      status: 'pending',
+      progress: 0,
+      user: userType === 'anonymous' ? null : userId, // Đảm bảo user là null cho anonymous
       isTemporary: userType === 'anonymous'
     });
+    
+    logDebug('Created video record', {
+      videoId: video._id,
+      userType,
+      userId: video.user,
+      isAnonymous: userType === 'anonymous'
+    });
 
-    const userDir = userId ? path.join(DOWNLOAD_DIR, userId.toString()) : path.join(DOWNLOAD_DIR, 'anonymous');
-    if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+    // Tính thời gian hết hạn
+    const expiresAtTTL = userType === 'premium' ? (settings.premiumStorageDays || 30) : (settings.freeStorageDays || 7);
+    const finalExpiresAt = userType === 'anonymous'
+        ? new Date(Date.now() + (settings.anonymousFileTTLMinutes || 5) * 60 * 1000)
+        : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
+    
+    // Cập nhật thời gian hết hạn
+    await Video.findByIdAndUpdate(video._id, { expiresAt: finalExpiresAt });
 
-    res.status(202).json({ success: true, message: 'Đang xử lý yêu cầu', data: { videoId: video._id } });
+    // Xóa cache thông tin video
+    clearCache(`video_info:${url}`);
 
-    (async () => {
-      try {
-        await Video.findByIdAndUpdate(video._id, { progress: 5 });
-        const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir, qualityKey || selectedFormatDetails.qualityKey);
-        const stats = fs.statSync(downloadPath);
-        const fileExt = path.extname(downloadPath).toLowerCase();
-        const finalFileType = fileExt.replace('.', '');
+    // Thêm job vào hàng đợi hoặc xử lý trực tiếp
+    const jobResult = await addVideoJob({
+      url,
+      formatId,
+      userId,
+      videoId: video._id,
+      qualityKey: qualityKey || selectedFormatDetails.qualityKey,
+      settings
+    });
 
-        const expiresAtTTL = userType === 'premium' ? (settings.premiumStorageDays || 30) : (settings.freeStorageDays || 7);
-        const finalExpiresAt = userType === 'anonymous' 
-            ? new Date(Date.now() + (settings.anonymousFileTTLMinutes || 5) * 60 * 1000) 
-            : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
+    logDebug('Processing video download request', {
+      videoId: video._id,
+      usingQueue: jobResult.queued || false,
+      redisAvailable: isRedisAvailable()
+    });
 
-        await Video.findByIdAndUpdate(video._id, {
-          status: 'completed',
-          downloadPath: downloadPath,
-          fileSize: stats.size,
-          fileType: finalFileType,
-          progress: 100,
-          expiresAt: finalExpiresAt
-        });
-
-        if (userId) {
-          await User.findByIdAndUpdate(userId, {
-            $inc: { downloadCount: 1, dailyDownloadCount: 1 },
-            lastDownloadDate: new Date()
-          });
-        }
-
-        if (userType === 'anonymous') {
-          const anonymousFileTTL = (settings.anonymousFileTTLMinutes || 5) * 60 * 1000;
-          logDebug(`Scheduling deletion for anonymous file: ${downloadPath} in ${anonymousFileTTL / 60000} minutes`, { videoId: video._id });
-          setTimeout(async () => {
-            try {
-              if (fs.existsSync(downloadPath)) {
-                fs.unlinkSync(downloadPath);
-                logDebug(`Deleted temporary anonymous file: ${downloadPath}`, { videoId: video._id });
-              }
-            } catch (unlinkError) {
-              logDebug(`Error deleting temporary anonymous file: ${downloadPath}`, { videoId: video._id, error: unlinkError.message });
-            }
-          }, anonymousFileTTL);
-        }
-        logDebug('Background download process finished successfully', { videoId: video._id });
-      } catch (error) {
-        logDebug('Error in background download process', { videoId: video._id, error: error.message });
-        await Video.findByIdAndUpdate(video._id, { status: 'failed', progress: 0, error: error.message.substring(0, 200) });
+    // Trả về ID video để client có thể kiểm tra trạng thái
+    res.status(202).json({
+      success: true,
+      message: 'Đang xử lý yêu cầu',
+      data: {
+        videoId: video._id,
+        jobId: jobResult.jobId || null,
+        processingMode: jobResult.queued ? 'queue' : 'direct'
       }
-    })();
+    });
+
+    // Nếu là anonymous, thiết lập xóa file sau khi hết hạn
+    if (userType === 'anonymous') {
+      const anonymousFileTTL = (settings.anonymousFileTTLMinutes || 5) * 60 * 1000;
+      setTimeout(async () => {
+        try {
+          const videoToDelete = await Video.findById(video._id);
+          if (videoToDelete && videoToDelete.downloadPath && fs.existsSync(videoToDelete.downloadPath)) {
+            fs.unlinkSync(videoToDelete.downloadPath);
+            logDebug(`Deleted temporary anonymous file: ${videoToDelete.downloadPath}`, { videoId: video._id });
+          }
+        } catch (unlinkError) {
+          logDebug(`Error deleting temporary anonymous file`, { videoId: video._id, error: unlinkError.message });
+        }
+      }, anonymousFileTTL);
+    }
   } catch (error) {
     logDebug('Error in downloadVideo controller', { error: error.message });
     res.status(500).json({ success: false, message: 'Lỗi xử lý yêu cầu tải xuống', error: error.message });
@@ -378,17 +389,48 @@ exports.deleteVideo = async (req, res, next) => {
 exports.streamVideo = async (req, res, next) => {
   try {
     const videoId = req.params.id;
+    logDebug(`Stream video request for ID: ${videoId}`, {
+      user: req.user ? { id: req.user.id, role: req.user.role } : 'anonymous',
+      headers: req.headers
+    });
+    
     const video = await Video.findById(videoId);
 
     if (!video) {
+      logDebug(`Video not found: ${videoId}`);
       return res.status(404).json({ success: false, message: 'Không tìm thấy video' });
     }
     
-    if (video.user && (!req.user || (video.user.toString() !== req.user.id && req.user.role !== 'admin'))) {
-       return res.status(403).json({ success: false, message: 'Không có quyền truy cập video này' });
+    // Kiểm tra quyền truy cập
+    const isAnonymousVideo = !video.user;
+    const isOwner = req.user && video.user && video.user.toString() === req.user.id;
+    const isAdmin = req.user && req.user.role === 'admin';
+    const isTemporary = video.isTemporary === true;
+    
+    logDebug(`Access check for video ${videoId}`, {
+      isAnonymousVideo,
+      isOwner,
+      isAdmin,
+      isTemporary,
+      videoUser: video.user ? video.user.toString() : 'none',
+      requestUser: req.user ? req.user.id : 'anonymous'
+    });
+    
+    // Cho phép truy cập nếu:
+    // 1. Video là anonymous (không có user) hoặc là video tạm thời
+    // 2. Người dùng là chủ sở hữu video
+    // 3. Người dùng là admin
+    if (!isAnonymousVideo && !isTemporary && !isOwner && !isAdmin) {
+      logDebug(`Access denied for video ${videoId}`);
+      return res.status(403).json({ success: false, message: 'Không có quyền truy cập video này' });
     }
 
     if (video.status !== 'completed' || !video.downloadPath || !fs.existsSync(video.downloadPath)) {
+      logDebug(`Video not ready or file not found: ${videoId}`, {
+        status: video.status,
+        path: video.downloadPath,
+        exists: video.downloadPath ? fs.existsSync(video.downloadPath) : false
+      });
       return res.status(400).json({ success: false, message: 'Video chưa sẵn sàng hoặc file không tồn tại.' });
     }
 
@@ -397,6 +439,8 @@ exports.streamVideo = async (req, res, next) => {
     const desiredFilename = `${video.title || 'video'}.${fileType}`.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ');
     
     const mimeType = getMimeType(`.${fileType}`);
+    logDebug(`Streaming file: ${video.downloadPath}`, { mimeType, desiredFilename });
+    
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(desiredFilename)}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -405,7 +449,7 @@ exports.streamVideo = async (req, res, next) => {
 
     const fileStream = fs.createReadStream(video.downloadPath);
     fileStream.on('error', (err) => {
-      logDebug('Error streaming file', { error: err.message });
+      logDebug('Error streaming file', { error: err.message, path: video.downloadPath });
       if (!res.headersSent) {
         res.status(500).json({ success: false, message: 'Lỗi khi đọc file video' });
       }
@@ -414,7 +458,7 @@ exports.streamVideo = async (req, res, next) => {
     res.on('finish', () => logDebug('File streaming completed successfully'));
 
   } catch (error) {
-    logDebug('Error in streamVideo', { error: error.message });
+    logDebug('Error in streamVideo', { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Không thể tải xuống video', error: error.message });
   }
 };

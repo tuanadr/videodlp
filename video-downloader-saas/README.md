@@ -59,6 +59,7 @@ video-downloader-saas/
 - Node.js 14.x trở lên
 - MongoDB 4.x trở lên
 - Python 3.x (cho youtube-dlp)
+- Redis (tùy chọn, cho xử lý hàng đợi)
 
 ## Cài đặt
 
@@ -79,7 +80,14 @@ npm install
 cp .env.example .env
 ```
 
-4. Khởi động server:
+4. Cấu hình Redis (tùy chọn):
+   - Nếu bạn có Redis, thêm URL kết nối vào file .env:
+   ```
+   REDIS_URL=redis://127.0.0.1:6379
+   ```
+   - Nếu không có Redis, hệ thống sẽ tự động chuyển sang chế độ xử lý trực tiếp
+
+5. Khởi động server:
 ```bash
 npm run dev
 ```
@@ -122,6 +130,47 @@ Dự án này sử dụng youtube-dlp để tải video. Đảm bảo rằng you
 ```bash
 pip install -U yt-dlp
 ```
+
+Nếu bạn muốn sử dụng ffmpeg để xử lý video (khuyến nghị):
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Windows
+# Tải từ https://ffmpeg.org/download.html
+```
+
+## Cấu hình Redis (Tùy chọn)
+
+Hệ thống sử dụng Redis để quản lý hàng đợi tải video, giúp cải thiện hiệu suất và khả năng mở rộng. Tuy nhiên, Redis là tùy chọn - nếu không có Redis, hệ thống sẽ tự động chuyển sang chế độ xử lý trực tiếp.
+
+### Cài đặt Redis
+
+#### Ubuntu/Debian
+```bash
+sudo apt-get update
+sudo apt-get install redis-server
+sudo systemctl enable redis-server
+```
+
+#### macOS
+```bash
+brew install redis
+brew services start redis
+```
+
+#### Windows
+Tải Redis từ https://github.com/microsoftarchive/redis/releases
+
+### Kiểm tra kết nối Redis
+```bash
+redis-cli ping
+```
+Nếu Redis đang chạy, bạn sẽ nhận được phản hồi "PONG".
 
 ## Triển khai
 
