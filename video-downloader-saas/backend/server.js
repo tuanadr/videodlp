@@ -16,6 +16,9 @@ const {
   secureHeaders
 } = require('./middleware/security');
 
+// Import error handling middleware
+const { errorHandler } = require('./utils/errorHandler');
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
@@ -103,38 +106,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// Xử lý lỗi
-app.use((err, req, res, next) => {
-  console.error(`[ERROR] ${err.stack}`);
-  
-  // Xử lý lỗi validation
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      success: false,
-      message: 'Dữ liệu không hợp lệ',
-      errors: Object.values(err.errors).map(val => ({
-        field: val.path,
-        message: val.message
-      }))
-    });
-  }
-  
-  // Xử lý lỗi JWT
-  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Token không hợp lệ hoặc đã hết hạn',
-      isExpired: err.name === 'TokenExpiredError'
-    });
-  }
-  
-  // Xử lý lỗi chung
-  res.status(err.statusCode || 500).json({
-    success: false,
-    message: err.message || 'Đã xảy ra lỗi máy chủ',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
+// Xử lý lỗi tập trung
+app.use(errorHandler);
 
 // Xử lý route không tồn tại
 app.use((req, res) => {
