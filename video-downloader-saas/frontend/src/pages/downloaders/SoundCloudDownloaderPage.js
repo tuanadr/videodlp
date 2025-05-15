@@ -40,8 +40,8 @@ const SoundCloudDownloaderPage = () => {
     setDownloadStatus(null);
     
     try {
-      const token = localStorage.getItem('token');
-      const config = token ? { headers: { 'Authorization': `Bearer ${token}` } } : {};
+      const accessToken = localStorage.getItem('accessToken');
+      const config = accessToken ? { headers: { 'Authorization': `Bearer ${accessToken}` } } : {};
       const res = await axios.post('/api/videos/info', { url }, config); 
       const audioData = res.data.data;
       setAudioInfo(audioData);
@@ -90,8 +90,8 @@ const SoundCloudDownloaderPage = () => {
     };
 
     try {
-      const token = localStorage.getItem('token');
-      const config = token ? { headers: { 'Authorization': `Bearer ${token}` } } : {};
+      const accessToken = localStorage.getItem('accessToken');
+      const config = accessToken ? { headers: { 'Authorization': `Bearer ${accessToken}` } } : {};
       const res = await axios.post('/api/videos/download', payload, config);
       const newDownloadId = res.data.data.videoId;
       setDownloadId(newDownloadId);
@@ -113,7 +113,7 @@ const SoundCloudDownloaderPage = () => {
       const response = await fetch(downloadUrl, {
         method: 'GET',
         headers: {
-          ...(localStorage.getItem('token') && {'Authorization': `Bearer ${localStorage.getItem('token')}`})
+          ...(localStorage.getItem('accessToken') && {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`})
         }
       });
       if (!response.ok) {

@@ -147,9 +147,25 @@ exports.getVideoInfo = async (req, res, next) => {
   }
 };
 
+// Hàm giải mã HTML entities
+function decodeHtmlEntities(text) {
+  if (!text) return text;
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&#x2F;/g, '/');
+}
+
 exports.downloadVideo = async (req, res, next) => {
   try {
-    const { url, formatId, title, formatType, qualityKey } = req.body;
+    let { url, formatId, title, formatType, qualityKey } = req.body;
+    
+    // Giải mã HTML entities trong formatId
+    formatId = decodeHtmlEntities(formatId);
+    
     logDebug('downloadVideo request received', { url, formatId, title, user: req.user ? req.user.id : 'anonymous' });
 
     if (!url || !formatId) {

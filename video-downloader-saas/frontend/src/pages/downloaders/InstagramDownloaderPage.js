@@ -40,8 +40,8 @@ const InstagramDownloaderPage = () => {
     setDownloadStatus(null);
     
     try {
-      const token = localStorage.getItem('token');
-      const config = token ? { headers: { 'Authorization': `Bearer ${token}` } } : {};
+      const accessToken = localStorage.getItem('accessToken');
+      const config = accessToken ? { headers: { 'Authorization': `Bearer ${accessToken}` } } : {};
       const res = await axios.post('/api/videos/info', { url }, config);
       const contentData = res.data.data;
       setVideoInfo(contentData); 
@@ -97,8 +97,8 @@ const InstagramDownloaderPage = () => {
     };
 
     try {
-      const token = localStorage.getItem('token');
-      const config = token ? { headers: { 'Authorization': `Bearer ${token}` } } : {};
+      const accessToken = localStorage.getItem('accessToken');
+      const config = accessToken ? { headers: { 'Authorization': `Bearer ${accessToken}` } } : {};
       const res = await axios.post('/api/videos/download', payload, config);
       const downloadId = res.data.data.videoId; 
       setVideoId(downloadId);
@@ -120,7 +120,7 @@ const InstagramDownloaderPage = () => {
       const response = await fetch(downloadUrl, {
         method: 'GET',
         headers: {
-          ...(localStorage.getItem('token') && {'Authorization': `Bearer ${localStorage.getItem('token')}`})
+          ...(localStorage.getItem('accessToken') && {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`})
         }
       });
       if (!response.ok) {

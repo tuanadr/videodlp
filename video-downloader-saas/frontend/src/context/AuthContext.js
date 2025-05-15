@@ -7,7 +7,9 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [accessToken, setAccessToken] = useState(localStorage.getItem('accessToken'));
+  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refreshToken'));
+  const [refreshTokenExpires, setRefreshTokenExpires] = useState(localStorage.getItem('refreshTokenExpires'));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,19 +17,68 @@ export const AuthProvider = ({ children }) => {
   // Cấu hình axios
   axios.defaults.baseURL = process.env.REACT_APP_API_URL || '';
   
-  // Thêm token vào header của mỗi request
+  // Thêm access token vào header của mỗi request
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    if (accessToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
     } else {
       delete axios.defaults.headers.common['Authorization'];
     }
-  }, [token]);
+  }, [accessToken]);
+
+  // Thiết lập interceptor để tự động refresh token khi token hết hạn
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+        
+        // Nếu lỗi 401 (Unauthorized) và có thông báo token hết hạn
+        // và chưa thử refresh token trước đó
+        if (
+          error.response?.status === 401 &&
+          error.response?.data?.isExpired === true &&
+          !originalRequest._retry &&
+          refreshToken
+        ) {
+          originalRequest._retry = true;
+          
+          try {
+            // Gọi API để refresh token
+            const res = await axios.post('/api/auth/refresh-token', {
+              refreshToken: refreshToken
+            });
+            
+            // Lưu access token mới
+            const newAccessToken = res.data.accessToken;
+            localStorage.setItem('accessToken', newAccessToken);
+            setAccessToken(newAccessToken);
+            
+            // Cập nhật header và thử lại request ban đầu
+            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+            return axios(originalRequest);
+          } catch (refreshError) {
+            // Nếu refresh token cũng hết hạn hoặc không hợp lệ, đăng xuất
+            console.error('Không thể refresh token:', refreshError);
+            logout();
+            return Promise.reject(refreshError);
+          }
+        }
+        
+        return Promise.reject(error);
+      }
+    );
+    
+    // Cleanup interceptor khi component unmount
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, [refreshToken]);
 
   // Kiểm tra xác thực khi component được mount
   useEffect(() => {
     const checkAuth = async () => {
-      if (!token) {
+      if (!accessToken) {
         setLoading(false);
         return;
       }
@@ -38,17 +89,30 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
       } catch (error) {
         console.error('Lỗi xác thực:', error);
-        localStorage.removeItem('token');
-        setToken(null);
-        setUser(null);
-        setIsAuthenticated(false);
+        // Không xóa refresh token ở đây, để interceptor có thể thử refresh
+        if (error.response?.status === 401 && error.response?.data?.isExpired !== true) {
+          // Chỉ xóa tokens nếu lỗi không phải do token hết hạn
+          clearAuthTokens();
+        }
       } finally {
         setLoading(false);
       }
     };
 
     checkAuth();
-  }, [token]);
+  }, [accessToken]);
+
+  // Hàm để xóa tất cả tokens
+  const clearAuthTokens = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('refreshTokenExpires');
+    setAccessToken(null);
+    setRefreshToken(null);
+    setRefreshTokenExpires(null);
+    setUser(null);
+    setIsAuthenticated(false);
+  };
 
   // Đăng ký
   const register = async (userData) => {
@@ -58,8 +122,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axios.post('/api/auth/register', userData);
       
-      localStorage.setItem('token', res.data.token);
-      setToken(res.data.token);
+      // Lưu access token và refresh token
+      localStorage.setItem('accessToken', res.data.accessToken);
+      localStorage.setItem('refreshToken', res.data.refreshToken);
+      localStorage.setItem('refreshTokenExpires', res.data.refreshTokenExpires);
+      
+      setAccessToken(res.data.accessToken);
+      setRefreshToken(res.data.refreshToken);
+      setRefreshTokenExpires(res.data.refreshTokenExpires);
       setUser(res.data.user);
       setIsAuthenticated(true);
       
@@ -83,8 +153,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axios.post('/api/auth/login', credentials);
       
-      localStorage.setItem('token', res.data.token);
-      setToken(res.data.token);
+      // Lưu access token và refresh token
+      localStorage.setItem('accessToken', res.data.accessToken);
+      localStorage.setItem('refreshToken', res.data.refreshToken);
+      localStorage.setItem('refreshTokenExpires', res.data.refreshTokenExpires);
+      
+      setAccessToken(res.data.accessToken);
+      setRefreshToken(res.data.refreshToken);
+      setRefreshTokenExpires(res.data.refreshTokenExpires);
       setUser(res.data.user);
       setIsAuthenticated(true);
       
@@ -103,14 +179,14 @@ export const AuthProvider = ({ children }) => {
   // Đăng xuất
   const logout = async () => {
     try {
-      await axios.get('/api/auth/logout');
+      // Gửi refresh token để server có thể thu hồi nó
+      if (refreshToken) {
+        await axios.post('/api/auth/logout', { refreshToken });
+      }
     } catch (error) {
       console.error('Lỗi khi đăng xuất:', error);
     } finally {
-      localStorage.removeItem('token');
-      setToken(null);
-      setUser(null);
-      setIsAuthenticated(false);
+      clearAuthTokens();
     }
   };
 
@@ -219,7 +295,8 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
-    token,
+    accessToken,
+    refreshToken,
     isAuthenticated,
     loading,
     error,

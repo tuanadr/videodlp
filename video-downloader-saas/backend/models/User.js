@@ -151,19 +151,69 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
-// Tạo JWT token
+// Tạo JWT access token
 UserSchema.methods.getSignedJwtToken = function() {
   return jwt.sign(
-    { 
+    {
       id: this._id,
       role: this.role,
       subscription: this.subscription
-    }, 
-    process.env.JWT_SECRET, 
+    },
+    process.env.JWT_SECRET,
     {
-      expiresIn: process.env.JWT_EXPIRE
+      expiresIn: process.env.JWT_EXPIRE || '1h' // Mặc định 1 giờ nếu không có cấu hình
     }
   );
+};
+
+// Tạo JWT refresh token
+UserSchema.methods.getRefreshToken = function() {
+  return jwt.sign(
+    {
+      id: this._id
+    },
+    process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d' // Mặc định 7 ngày nếu không có cấu hình
+    }
+  );
+};
+
+// Tạo và lưu refresh token vào database
+UserSchema.methods.createRefreshToken = async function(userAgent, ipAddress) {
+  // Tạo refresh token
+  const refreshToken = this.getRefreshToken();
+  
+  // Tính thời gian hết hạn
+  const expiresIn = process.env.REFRESH_TOKEN_EXPIRE || '7d';
+  const expiresAt = new Date();
+  
+  // Chuyển đổi thời gian hết hạn từ chuỗi sang milliseconds
+  if (expiresIn.endsWith('d')) {
+    expiresAt.setDate(expiresAt.getDate() + parseInt(expiresIn));
+  } else if (expiresIn.endsWith('h')) {
+    expiresAt.setHours(expiresAt.getHours() + parseInt(expiresIn));
+  } else if (expiresIn.endsWith('m')) {
+    expiresAt.setMinutes(expiresAt.getMinutes() + parseInt(expiresIn));
+  } else {
+    // Mặc định 7 ngày
+    expiresAt.setDate(expiresAt.getDate() + 7);
+  }
+  
+  // Lưu refresh token vào database
+  const RefreshToken = require('./RefreshToken');
+  const savedToken = await RefreshToken.createToken(
+    this,
+    refreshToken,
+    expiresAt,
+    userAgent,
+    ipAddress
+  );
+  
+  return {
+    token: refreshToken,
+    expiresAt
+  };
 };
 
 // So sánh mật khẩu nhập vào với mật khẩu đã mã hóa

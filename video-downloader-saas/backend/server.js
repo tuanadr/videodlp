@@ -4,6 +4,17 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const morgan = require('morgan'); // Thêm morgan cho logging
+const compression = require('express-compression'); // Thêm compression
+const cookieParser = require('cookie-parser');
+
+// Import security middleware
+const {
+  configureHelmet,
+  configureCsrf,
+  handleCsrfError,
+  setCsrfToken,
+  secureHeaders
+} = require('./middleware/security');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -16,10 +27,27 @@ const referralRoutes = require('./routes/referral'); // Thêm routes cho referra
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Middleware bảo mật
+app.use(configureHelmet()); // Thiết lập các HTTP headers bảo mật
+app.use(secureHeaders); // Thiết lập các headers bảo mật bổ sung
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true, // Cho phép gửi cookie qua CORS
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+}));
+
+// Body parser middleware
+app.use(express.json({ limit: '10mb' })); // Giới hạn kích thước body
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parser middleware (cần thiết cho CSRF)
+app.use(cookieParser());
+
+// Compression middleware
+app.use(compression({ level: 6 })); // Nén dữ liệu với mức độ 6
 
 // Logging middleware
 app.use(morgan('dev')); // Log các yêu cầu HTTP
@@ -31,7 +59,17 @@ app.use((req, res, next) => {
 });
 
 // Thư mục lưu trữ video tạm thời
-app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
+app.use('/downloads', express.static(path.join(__dirname, 'downloads'), {
+  maxAge: '1d', // Cache tĩnh trong 1 ngày
+  etag: true
+}));
+
+// CSRF protection (chỉ áp dụng cho các routes không phải API)
+if (process.env.NODE_ENV === 'production') {
+  app.use('/api', configureCsrf());
+  app.use('/api', handleCsrfError);
+  app.use('/api', setCsrfToken);
+}
 
 // Middleware để log các yêu cầu API
 app.use('/api', (req, res, next) => {
@@ -68,9 +106,32 @@ app.get('/', (req, res) => {
 // Xử lý lỗi
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${err.stack}`);
-  res.status(500).json({
+  
+  // Xử lý lỗi validation
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Dữ liệu không hợp lệ',
+      errors: Object.values(err.errors).map(val => ({
+        field: val.path,
+        message: val.message
+      }))
+    });
+  }
+  
+  // Xử lý lỗi JWT
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Token không hợp lệ hoặc đã hết hạn',
+      isExpired: err.name === 'TokenExpiredError'
+    });
+  }
+  
+  // Xử lý lỗi chung
+  res.status(err.statusCode || 500).json({
     success: false,
-    message: 'Đã xảy ra lỗi máy chủ',
+    message: err.message || 'Đã xảy ra lỗi máy chủ',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
@@ -83,6 +144,10 @@ app.use((req, res) => {
     message: `Cannot ${req.method} ${req.originalUrl}`
   });
 });
+
+// Định kỳ xóa các refresh token hết hạn (chạy mỗi 24 giờ)
+const { cleanupExpiredTokens } = require('./middleware/auth');
+setInterval(cleanupExpiredTokens, 24 * 60 * 60 * 1000);
 
 // Kết nối MongoDB
 const connectDB = async () => {

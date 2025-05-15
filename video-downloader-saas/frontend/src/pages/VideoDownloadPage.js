@@ -51,14 +51,14 @@ const VideoDownloadPage = () => {
     try {
       console.log('Fetching video info for URL:', url);
       
-      // Lấy token từ localStorage để đảm bảo nó được gửi đi
-      const token = localStorage.getItem('token');
+      // Lấy accessToken từ localStorage để đảm bảo nó được gửi đi
+      const accessToken = localStorage.getItem('accessToken');
       
-      // Tạo config với headers chứa token (nếu có)
+      // Tạo config với headers chứa accessToken (nếu có)
       const config = {};
-      if (token) {
+      if (accessToken) {
         config.headers = {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`
         };
         console.log('Including auth token in request');
       } else {
@@ -630,10 +630,10 @@ const VideoDownloadPage = () => {
                                 xhr.open('GET', `/api/videos/${videoId}/download`, true);
                                 xhr.responseType = 'blob';
                                 
-                                // Thêm token xác thực vào header
-                                const token = localStorage.getItem('token');
-                                if (token) {
-                                  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                                // Thêm accessToken xác thực vào header
+                                const accessToken = localStorage.getItem('accessToken');
+                                if (accessToken) {
+                                  xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
                                   console.log('Adding auth token to download request');
                                 }
                                 
