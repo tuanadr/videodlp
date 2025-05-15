@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const LoginPage = () => {
+  const { login, error, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, error } = useAuth();
-  const navigate = useNavigate();
+  // const { login, error } = useAuth(); // Đã khai báo ở trên
+  // const navigate = useNavigate(); // Đã khai báo ở trên
 
   const { email, password } = formData;
 

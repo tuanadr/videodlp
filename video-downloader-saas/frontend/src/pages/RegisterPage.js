@@ -3,6 +3,16 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const RegisterPage = () => {
+  const { register, error, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -10,9 +20,6 @@ const RegisterPage = () => {
     confirmPassword: '',
     referralCode: ''
   });
-  
-  const location = useLocation();
-  
   // Lấy mã giới thiệu từ query params (nếu có)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -27,8 +34,8 @@ const RegisterPage = () => {
   }, [location.search]);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, error } = useAuth();
-  const navigate = useNavigate();
+  // const { register, error } = useAuth(); // Đã khai báo ở trên
+  // const navigate = useNavigate(); // Đã khai báo ở trên
 
   const { name, email, password, confirmPassword, referralCode } = formData;
 

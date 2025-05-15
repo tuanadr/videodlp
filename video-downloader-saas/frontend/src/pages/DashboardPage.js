@@ -10,21 +10,25 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchVideos = async () => {
-      try {
-        const res = await axios.get('/api/videos');
-        setVideos(res.data.data);
-      } catch (error) {
-        console.error('Lỗi khi lấy danh sách video:', error);
-        setError('Không thể tải danh sách video. Vui lòng thử lại sau.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchVideos = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get('/api/videos');
+      setVideos(res.data.data);
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách video:', error);
+      setError('Không thể tải danh sách video. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchVideos();
-  }, []);
+  useEffect(() => {
+    if (user) { // Chỉ fetch videos khi user đã được load
+      fetchVideos();
+    }
+  }, [user]); // Thêm user vào dependency array
 
   const handleDeleteVideo = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa video này?')) {
@@ -146,7 +150,7 @@ const DashboardPage = () => {
             <div className="px-4 py-5 sm:px-6 text-center">
               <p className="text-sm text-red-600">{error}</p>
               <button
-                onClick={() => window.location.reload()}
+                onClick={fetchVideos}
                 className="mt-2 inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 Thử lại
