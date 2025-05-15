@@ -12,7 +12,20 @@ const AdminSettingsPage = () => {
     maintenanceMode: false,
     allowedFormats: ['mp4', 'webm', 'mp3', 'm4a'],
     maxFileSize: 1024 * 1024 * 1024, // 1GB
-    referralBonusDownloads: 5 // Số lượt tải thưởng cho mỗi lần giới thiệu
+    referralBonusDownloads: 5, // Số lượt tải thưởng cho mỗi lần giới thiệu
+    seo: {
+      siteName: "VideoDownloader - Tải video từ nhiều nguồn",
+      siteDescription: "Dịch vụ tải video trực tuyến từ nhiều nguồn khác nhau như YouTube, Facebook, TikTok và hơn 1000 trang web khác.",
+      defaultKeywords: "tải video, download video, youtube downloader, facebook downloader, tiktok downloader",
+      defaultImage: "/logo512.png",
+      twitterHandle: "@videodownloader",
+      googleAnalyticsId: "",
+      facebookAppId: "",
+      enableStructuredData: true,
+      enableOpenGraph: true,
+      enableTwitterCards: true,
+      enableCanonicalUrls: true
+    }
   });
   
   const [loading, setLoading] = useState(true);
@@ -44,7 +57,28 @@ const AdminSettingsPage = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
-    if (type === 'checkbox') {
+    // Xử lý cài đặt SEO
+    if (name.startsWith('seo.')) {
+      const seoField = name.split('.')[1];
+      
+      if (type === 'checkbox') {
+        setSettings({
+          ...settings,
+          seo: {
+            ...settings.seo,
+            [seoField]: checked
+          }
+        });
+      } else {
+        setSettings({
+          ...settings,
+          seo: {
+            ...settings.seo,
+            [seoField]: value
+          }
+        });
+      }
+    } else if (type === 'checkbox') {
       setSettings({ ...settings, [name]: checked });
     } else if (name === 'maxFileSize') {
       // Chuyển đổi từ GB sang bytes
@@ -354,6 +388,225 @@ const AdminSettingsPage = () => {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Cài đặt SEO */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6">
+            <h2 className="text-lg leading-6 font-medium text-gray-900">Cài đặt SEO</h2>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              Quản lý các cài đặt SEO và metadata cho trang web.
+            </p>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div>
+                <label htmlFor="seo.siteName" className="block text-sm font-medium text-gray-700">
+                  Tên trang web
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="seo.siteName"
+                    id="seo.siteName"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.siteName}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Tên trang web hiển thị trong tiêu đề và metadata.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="seo.defaultImage" className="block text-sm font-medium text-gray-700">
+                  Đường dẫn hình ảnh mặc định
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="seo.defaultImage"
+                    id="seo.defaultImage"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.defaultImage}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Đường dẫn tương đối đến hình ảnh mặc định cho Open Graph và Twitter Cards.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label htmlFor="seo.siteDescription" className="block text-sm font-medium text-gray-700">
+                  Mô tả trang web
+                </label>
+                <div className="mt-1">
+                  <textarea
+                    name="seo.siteDescription"
+                    id="seo.siteDescription"
+                    rows="3"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.siteDescription}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Mô tả ngắn gọn về trang web, hiển thị trong kết quả tìm kiếm và khi chia sẻ.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label htmlFor="seo.defaultKeywords" className="block text-sm font-medium text-gray-700">
+                  Từ khóa mặc định
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="seo.defaultKeywords"
+                    id="seo.defaultKeywords"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.defaultKeywords}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Danh sách từ khóa mặc định, cách nhau bằng dấu phẩy.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="seo.twitterHandle" className="block text-sm font-medium text-gray-700">
+                  Twitter Handle
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="seo.twitterHandle"
+                    id="seo.twitterHandle"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.twitterHandle}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Tên người dùng Twitter của trang web (bắt đầu bằng @).
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="seo.facebookAppId" className="block text-sm font-medium text-gray-700">
+                  Facebook App ID
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="seo.facebookAppId"
+                    id="seo.facebookAppId"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.facebookAppId}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  ID ứng dụng Facebook cho Open Graph.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="seo.googleAnalyticsId" className="block text-sm font-medium text-gray-700">
+                  Google Analytics ID
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="seo.googleAnalyticsId"
+                    id="seo.googleAnalyticsId"
+                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    value={settings.seo.googleAnalyticsId}
+                    onChange={handleChange}
+                    placeholder="G-XXXXXXXXXX hoặc UA-XXXXXXXX-X"
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  ID Google Analytics để theo dõi lưu lượng truy cập.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="seo.enableStructuredData"
+                        name="seo.enableStructuredData"
+                        type="checkbox"
+                        className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                        checked={settings.seo.enableStructuredData}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="seo.enableStructuredData" className="font-medium text-gray-700">Bật Structured Data (JSON-LD)</label>
+                      <p className="text-gray-500">Thêm dữ liệu có cấu trúc để cải thiện hiển thị trên kết quả tìm kiếm.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="seo.enableOpenGraph"
+                        name="seo.enableOpenGraph"
+                        type="checkbox"
+                        className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                        checked={settings.seo.enableOpenGraph}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="seo.enableOpenGraph" className="font-medium text-gray-700">Bật Open Graph</label>
+                      <p className="text-gray-500">Thêm thẻ Open Graph để cải thiện hiển thị khi chia sẻ trên Facebook và các mạng xã hội khác.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="seo.enableTwitterCards"
+                        name="seo.enableTwitterCards"
+                        type="checkbox"
+                        className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                        checked={settings.seo.enableTwitterCards}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="seo.enableTwitterCards" className="font-medium text-gray-700">Bật Twitter Cards</label>
+                      <p className="text-gray-500">Thêm thẻ Twitter Cards để cải thiện hiển thị khi chia sẻ trên Twitter.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="seo.enableCanonicalUrls"
+                        name="seo.enableCanonicalUrls"
+                        type="checkbox"
+                        className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                        checked={settings.seo.enableCanonicalUrls}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="seo.enableCanonicalUrls" className="font-medium text-gray-700">Bật Canonical URLs</label>
+                      <p className="text-gray-500">Thêm thẻ canonical để tránh nội dung trùng lặp.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

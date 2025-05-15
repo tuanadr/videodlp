@@ -25,7 +25,20 @@ router.get('/', (req, res) => {
           freeStorageDays: 1,
           maintenanceMode: false,
           allowedFormats: ['mp4', 'webm', 'mp3', 'm4a'],
-          maxFileSize: 1024 * 1024 * 1024 // 1GB
+          maxFileSize: 1024 * 1024 * 1024, // 1GB
+          seo: {
+            siteName: "VideoDownloader - Tải video từ nhiều nguồn",
+            siteDescription: "Dịch vụ tải video trực tuyến từ nhiều nguồn khác nhau như YouTube, Facebook, TikTok và hơn 1000 trang web khác.",
+            defaultKeywords: "tải video, download video, youtube downloader, facebook downloader, tiktok downloader",
+            defaultImage: "/logo512.png",
+            twitterHandle: "@videodownloader",
+            googleAnalyticsId: "",
+            facebookAppId: "",
+            enableStructuredData: true,
+            enableOpenGraph: true,
+            enableTwitterCards: true,
+            enableCanonicalUrls: true
+          }
         }
       });
     }

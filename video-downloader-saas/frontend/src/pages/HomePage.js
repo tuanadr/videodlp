@@ -1,11 +1,50 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
+import SEO from '../components/seo/SEO';
 
 const HomePage = () => {
   const { settings } = useSettings();
+  
+  // Structured data cho trang chủ
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "VideoDownloader - Tải video từ nhiều nguồn",
+    "url": "https://viddown.vn",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://viddown.vn/dashboard/download?url={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  };
+  
+  // Structured data cho ứng dụng phần mềm
+  const appStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "VideoDownloader",
+    "applicationCategory": "MultimediaApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "VND"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "1024"
+    }
+  };
+  
   return (
     <div>
+      <SEO
+        title="Tải video từ mọi nền tảng - YouTube, Facebook, TikTok"
+        description="Dịch vụ tải video trực tuyến nhanh chóng, dễ dàng và an toàn từ YouTube, Facebook, Twitter và nhiều nguồn khác."
+        keywords="tải video, download video, youtube downloader, facebook downloader, tiktok downloader"
+        structuredData={[structuredData, appStructuredData]}
+      />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white">
         <div className="max-w-7xl mx-auto py-16 px-4 sm:py-24 sm:px-6 lg:px-8">

@@ -13,7 +13,20 @@ export const SettingsProvider = ({ children }) => {
     freeStorageDays: 1,
     maintenanceMode: false,
     allowedFormats: ['mp4', 'webm', 'mp3', 'm4a'],
-    maxFileSize: 1024 * 1024 * 1024 // 1GB
+    maxFileSize: 1024 * 1024 * 1024, // 1GB
+    seo: {
+      siteName: "VideoDownloader - Tải video từ nhiều nguồn",
+      siteDescription: "Dịch vụ tải video trực tuyến từ nhiều nguồn khác nhau như YouTube, Facebook, TikTok và hơn 1000 trang web khác.",
+      defaultKeywords: "tải video, download video, youtube downloader, facebook downloader, tiktok downloader",
+      defaultImage: "/logo512.png",
+      twitterHandle: "@videodownloader",
+      googleAnalyticsId: "",
+      facebookAppId: "",
+      enableStructuredData: true,
+      enableOpenGraph: true,
+      enableTwitterCards: true,
+      enableCanonicalUrls: true
+    }
   });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -23,8 +36,23 @@ export const SettingsProvider = ({ children }) => {
     try {
       setLoading(true);
       const res = await axios.get('/api/settings');
-      setSettings(res.data.data);
+      
+      // Đảm bảo phần seo không bị mất nếu API không trả về
+      const newSettings = res.data.data;
+      if (!newSettings.seo) {
+        newSettings.seo = settings.seo;
+      } else {
+        // Đảm bảo tất cả các trường seo đều có giá trị
+        newSettings.seo = {
+          ...settings.seo,
+          ...newSettings.seo
+        };
+      }
+      
+      setSettings(newSettings);
       setLastUpdated(new Date());
+      
+      console.log('Đã cập nhật cài đặt từ server:', newSettings);
     } catch (error) {
       console.error('Lỗi khi lấy cài đặt hệ thống:', error);
     } finally {
@@ -35,10 +63,36 @@ export const SettingsProvider = ({ children }) => {
   // Cập nhật cài đặt (chỉ dành cho admin)
   const updateSettings = async (newSettings) => {
     try {
+      // Đảm bảo phần seo không bị mất
+      if (!newSettings.seo) {
+        newSettings.seo = settings.seo;
+      } else {
+        // Đảm bảo tất cả các trường seo đều có giá trị
+        newSettings.seo = {
+          ...settings.seo,
+          ...newSettings.seo
+        };
+      }
+      
       const res = await axios.put('/api/admin/settings', newSettings);
-      setSettings(res.data.data);
+      
+      // Đảm bảo phần seo không bị mất trong dữ liệu trả về
+      const updatedSettings = res.data.data;
+      if (!updatedSettings.seo) {
+        updatedSettings.seo = settings.seo;
+      } else {
+        // Đảm bảo tất cả các trường seo đều có giá trị
+        updatedSettings.seo = {
+          ...settings.seo,
+          ...updatedSettings.seo
+        };
+      }
+      
+      setSettings(updatedSettings);
       setLastUpdated(new Date());
-      return { success: true, data: res.data.data };
+      
+      console.log('Đã cập nhật cài đặt:', updatedSettings);
+      return { success: true, data: updatedSettings };
     } catch (error) {
       console.error('Lỗi khi cập nhật cài đặt hệ thống:', error);
       return { success: false, error: error.response?.data?.message || 'Lỗi khi cập nhật cài đặt' };

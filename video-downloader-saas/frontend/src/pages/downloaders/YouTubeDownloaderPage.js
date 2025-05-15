@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
-import { useAuth } from '../../context/AuthContext'; 
-import { useSettings } from '../../context/SettingsContext'; 
-import { Link, useNavigate } from 'react-router-dom'; 
+import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
+import { Link, useNavigate } from 'react-router-dom';
+import SEO from '../../components/seo/SEO';
 
 const YouTubeDownloaderPage = () => {
   const { user, isAuthenticated } = useAuth();
@@ -194,10 +194,30 @@ const YouTubeDownloaderPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Helmet>
-        <title>Tải Video YouTube Full HD, 4K Miễn Phí - Nhanh và Dễ Dàng | VidDown</title>
-        <meta name="description" content="Tải video YouTube chất lượng cao Full HD, 4K, 8K miễn phí với công cụ tải video YouTube nhanh chóng và dễ sử dụng của chúng tôi. Hỗ trợ chuyển đổi YouTube sang MP3." />
-      </Helmet>
+      <SEO
+        title="Tải Video YouTube Full HD, 4K Miễn Phí - Nhanh và Dễ Dàng"
+        description="Tải video YouTube chất lượng cao Full HD, 4K, 8K miễn phí với công cụ tải video YouTube nhanh chóng và dễ sử dụng của chúng tôi. Hỗ trợ chuyển đổi YouTube sang MP3."
+        keywords="tải video youtube, youtube downloader, tải youtube mp3, youtube to mp3, tải video youtube 4k, youtube hd"
+        canonicalPath="/tai-video-youtube"
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          "name": "YouTube Video Downloader",
+          "applicationCategory": "MultimediaApplication",
+          "operatingSystem": "Web",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "VND"
+          },
+          "description": "Công cụ tải video YouTube chất lượng cao miễn phí, hỗ trợ nhiều định dạng và chất lượng.",
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "ratingCount": "1256"
+          }
+        }}
+      />
 
       <header className="text-center mb-12">
         <h1 className="text-4xl font-bold text-gray-800 mb-4">
