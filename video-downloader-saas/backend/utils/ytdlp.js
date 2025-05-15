@@ -416,11 +416,9 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
         '--force-overwrites' // Ghi đè file nếu đã tồn tại
       ];
       
-      // Không sử dụng --postprocessor-args vì nó gây ra lỗi
-      // Thay vào đó, chỉ sử dụng các tham số cơ bản của yt-dlp
-      if (audioFormat === 'mp3') {
-        // Đối với MP3, chỉ cần các tham số cơ bản
-        // yt-dlp sẽ tự động sử dụng ffmpeg để chuyển đổi sang MP3
+      // Thêm tham số để đảm bảo không tự động chuyển đổi sang MP4
+      if (audioFormat === 'mp3' || audioFormat === 'webm' || audioFormat === 'm4a') {
+        downloadArgs.push('--postprocessor-args', `FFmpegExtractAudio:-c:a libmp3lame -q:a 2 -f ${audioFormat}`);
       }
     } else if (effectiveQuality === 'best') {
       // Lựa chọn "Chất lượng tốt nhất có sẵn"
