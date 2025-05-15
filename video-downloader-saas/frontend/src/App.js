@@ -21,6 +21,13 @@ import PaymentCancelPage from './pages/PaymentCancelPage';
 import SupportedSitesPage from './pages/SupportedSitesPage';
 import ReferralPage from './pages/ReferralPage';
 
+// Downloader Pages
+import YouTubeDownloaderPage from './pages/downloaders/YouTubeDownloaderPage';
+import FacebookDownloaderPage from './pages/downloaders/FacebookDownloaderPage';
+import TikTokDownloaderPage from './pages/downloaders/TikTokDownloaderPage';
+import InstagramDownloaderPage from './pages/downloaders/InstagramDownloaderPage';
+import SoundCloudDownloaderPage from './pages/downloaders/SoundCloudDownloaderPage';
+
 // Admin Pages
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
@@ -74,6 +81,11 @@ function App() {
         <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
         <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
         <Route path="supported-sites" element={<SupportedSitesPage />} />
+        <Route path="tai-video-youtube" element={<YouTubeDownloaderPage />} />
+        <Route path="tai-video-facebook" element={<FacebookDownloaderPage />} />
+        <Route path="tai-video-tiktok" element={<TikTokDownloaderPage />} />
+        <Route path="tai-video-instagram" element={<InstagramDownloaderPage />} />
+        <Route path="tai-nhac-soundcloud" element={<SoundCloudDownloaderPage />} />
       </Route>
 
       {/* Protected Routes */}

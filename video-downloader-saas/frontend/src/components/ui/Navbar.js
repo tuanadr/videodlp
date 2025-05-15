@@ -36,6 +36,46 @@ const Navbar = () => {
               >
                 Trang web hỗ trợ
               </Link>
+              {/* Dropdown cho các trang tải nhanh */}
+              <div className="relative inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium">
+                <button 
+                  type="button" 
+                  className="text-gray-500 group bg-white rounded-md inline-flex items-center text-sm font-medium hover:text-primary-700 focus:outline-none"
+                  onMouseEnter={() => document.getElementById('downloader-pages-menu').classList.remove('hidden')}
+                  onMouseLeave={() => document.getElementById('downloader-pages-menu').classList.add('hidden')}
+                >
+                  <span>Công cụ tải nhanh</span>
+                  <svg className="ml-2 h-5 w-5 text-gray-400 group-hover:text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <div 
+                  id="downloader-pages-menu"
+                  className="hidden absolute z-10 -ml-4 mt-3 transform px-2 w-screen max-w-xs sm:px-0 lg:ml-0 lg:left-1/2 lg:-translate-x-1/2"
+                  onMouseEnter={() => document.getElementById('downloader-pages-menu').classList.remove('hidden')}
+                  onMouseLeave={() => document.getElementById('downloader-pages-menu').classList.add('hidden')}
+                >
+                  <div className="rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 overflow-hidden">
+                    <div className="relative grid gap-6 bg-white px-5 py-6 sm:gap-8 sm:p-8">
+                      <Link to="/tai-video-youtube" className="-m-3 p-3 flex items-start rounded-lg hover:bg-gray-50">
+                        <p className="text-sm font-medium text-gray-900">Tải Video YouTube</p>
+                      </Link>
+                      <Link to="/tai-video-facebook" className="-m-3 p-3 flex items-start rounded-lg hover:bg-gray-50">
+                        <p className="text-sm font-medium text-gray-900">Tải Video Facebook</p>
+                      </Link>
+                      <Link to="/tai-video-tiktok" className="-m-3 p-3 flex items-start rounded-lg hover:bg-gray-50">
+                        <p className="text-sm font-medium text-gray-900">Tải Video TikTok</p>
+                      </Link>
+                      <Link to="/tai-video-instagram" className="-m-3 p-3 flex items-start rounded-lg hover:bg-gray-50">
+                        <p className="text-sm font-medium text-gray-900">Tải Video Instagram</p>
+                      </Link>
+                      <Link to="/tai-nhac-soundcloud" className="-m-3 p-3 flex items-start rounded-lg hover:bg-gray-50">
+                        <p className="text-sm font-medium text-gray-900">Tải Nhạc SoundCloud</p>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
               {isAuthenticated && (
                 <>
                   <Link
@@ -200,6 +240,45 @@ const Navbar = () => {
           >
             Trang web hỗ trợ
           </Link>
+          {/* Thêm các link tải nhanh cho mobile */}
+          <div className="border-t border-gray-200 pt-2">
+            <p className="pl-3 pr-4 py-2 text-xs font-semibold text-gray-500 uppercase">Công cụ tải nhanh</p>
+            <Link
+              to="/tai-video-youtube"
+              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-primary-500 hover:text-primary-700"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Tải Video YouTube
+            </Link>
+            <Link
+              to="/tai-video-facebook"
+              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-primary-500 hover:text-primary-700"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Tải Video Facebook
+            </Link>
+            <Link
+              to="/tai-video-tiktok"
+              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-primary-500 hover:text-primary-700"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Tải Video TikTok
+            </Link>
+            <Link
+              to="/tai-video-instagram"
+              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-primary-500 hover:text-primary-700"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Tải Video Instagram
+            </Link>
+            <Link
+              to="/tai-nhac-soundcloud"
+              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-primary-500 hover:text-primary-700"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Tải Nhạc SoundCloud
+            </Link>
+          </div>
           {isAuthenticated && (
             <>
               <Link
