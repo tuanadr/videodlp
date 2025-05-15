@@ -173,32 +173,32 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
       <div className="px-4 py-6 sm:px-0">
-        <div className="mb-10">
+        <header className="mb-10">
           <h1 className="text-2xl font-semibold text-gray-900">Hồ sơ của tôi</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-gray-700">
             Quản lý thông tin cá nhân và mật khẩu của bạn.
           </p>
-        </div>
+        </header>
 
         {/* Thông tin cá nhân */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
-          <div className="px-4 py-5 sm:px-6">
-            <h2 className="text-lg leading-6 font-medium text-gray-900">
+        <section className="bg-white shadow overflow-hidden sm:rounded-lg mb-8" aria-labelledby="personal-info-heading">
+          <header className="px-4 py-5 sm:px-6">
+            <h2 id="personal-info-heading" className="text-lg leading-6 font-medium text-gray-900">
               Thông tin cá nhân
             </h2>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            <p className="mt-1 max-w-2xl text-sm text-gray-700">
               Cập nhật thông tin cá nhân của bạn.
             </p>
-          </div>
+          </header>
           
           <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
             {profileSuccess && (
-              <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
+              <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4" role="alert" aria-live="polite">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -212,10 +212,10 @@ const ProfilePage = () => {
             )}
             
             {error && (
-              <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
+              <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4" role="alert" aria-live="assertive">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -241,9 +241,11 @@ const ProfilePage = () => {
                     className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       profileErrors.name ? 'border-red-300' : ''
                     }`}
+                    aria-invalid={profileErrors.name ? "true" : "false"}
+                    aria-describedby={profileErrors.name ? "name-error" : undefined}
                   />
                   {profileErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{profileErrors.name}</p>
+                    <p className="mt-1 text-sm text-red-600" id="name-error">{profileErrors.name}</p>
                   )}
                 </div>
               </div>
@@ -262,9 +264,11 @@ const ProfilePage = () => {
                     className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       profileErrors.email ? 'border-red-300' : ''
                     }`}
+                    aria-invalid={profileErrors.email ? "true" : "false"}
+                    aria-describedby={profileErrors.email ? "email-error" : undefined}
                   />
                   {profileErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{profileErrors.email}</p>
+                    <p className="mt-1 text-sm text-red-600" id="email-error">{profileErrors.email}</p>
                   )}
                 </div>
               </div>
@@ -276,13 +280,16 @@ const ProfilePage = () => {
                   className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
                     profileLoading ? 'opacity-70 cursor-not-allowed' : ''
                   }`}
+                  aria-busy={profileLoading}
+                  aria-disabled={profileLoading}
                 >
                   {profileLoading ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
+                      <span className="sr-only">Đang cập nhật</span>
                       Đang cập nhật...
                     </>
                   ) : (
@@ -292,25 +299,25 @@ const ProfilePage = () => {
               </div>
             </form>
           </div>
-        </div>
+        </section>
 
         {/* Đổi mật khẩu */}
-        <div id="password-section" className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
-            <h2 className="text-lg leading-6 font-medium text-gray-900">
+        <section id="password-section" className="bg-white shadow overflow-hidden sm:rounded-lg" aria-labelledby="password-heading">
+          <header className="px-4 py-5 sm:px-6">
+            <h2 id="password-heading" className="text-lg leading-6 font-medium text-gray-900">
               Đổi mật khẩu
             </h2>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            <p className="mt-1 max-w-2xl text-sm text-gray-700">
               Cập nhật mật khẩu của bạn để bảo mật tài khoản.
             </p>
-          </div>
+          </header>
           
           <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
             {passwordSuccess && (
-              <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
+              <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4" role="alert" aria-live="polite">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -338,9 +345,11 @@ const ProfilePage = () => {
                     className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       passwordErrors.currentPassword ? 'border-red-300' : ''
                     }`}
+                    aria-invalid={passwordErrors.currentPassword ? "true" : "false"}
+                    aria-describedby={passwordErrors.currentPassword ? "currentPassword-error" : undefined}
                   />
                   {passwordErrors.currentPassword && (
-                    <p className="mt-1 text-sm text-red-600">{passwordErrors.currentPassword}</p>
+                    <p className="mt-1 text-sm text-red-600" id="currentPassword-error">{passwordErrors.currentPassword}</p>
                   )}
                 </div>
               </div>
@@ -359,9 +368,11 @@ const ProfilePage = () => {
                     className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       passwordErrors.newPassword ? 'border-red-300' : ''
                     }`}
+                    aria-invalid={passwordErrors.newPassword ? "true" : "false"}
+                    aria-describedby={passwordErrors.newPassword ? "newPassword-error" : undefined}
                   />
                   {passwordErrors.newPassword && (
-                    <p className="mt-1 text-sm text-red-600">{passwordErrors.newPassword}</p>
+                    <p className="mt-1 text-sm text-red-600" id="newPassword-error">{passwordErrors.newPassword}</p>
                   )}
                 </div>
               </div>
@@ -380,9 +391,11 @@ const ProfilePage = () => {
                     className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       passwordErrors.confirmPassword ? 'border-red-300' : ''
                     }`}
+                    aria-invalid={passwordErrors.confirmPassword ? "true" : "false"}
+                    aria-describedby={passwordErrors.confirmPassword ? "confirmPassword-error" : undefined}
                   />
                   {passwordErrors.confirmPassword && (
-                    <p className="mt-1 text-sm text-red-600">{passwordErrors.confirmPassword}</p>
+                    <p className="mt-1 text-sm text-red-600" id="confirmPassword-error">{passwordErrors.confirmPassword}</p>
                   )}
                 </div>
               </div>
@@ -394,13 +407,16 @@ const ProfilePage = () => {
                   className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
                     passwordLoading ? 'opacity-70 cursor-not-allowed' : ''
                   }`}
+                  aria-busy={passwordLoading}
+                  aria-disabled={passwordLoading}
                 >
                   {passwordLoading ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
+                      <span className="sr-only">Đang cập nhật</span>
                       Đang cập nhật...
                     </>
                   ) : (
@@ -410,9 +426,9 @@ const ProfilePage = () => {
               </div>
             </form>
           </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 };
 

@@ -260,27 +260,30 @@ const VideoDownloadPage = () => {
   }, [videoInfo, activeTab, selectedFormat]);
 
   return (
-    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
-            <h1 className="text-lg leading-6 font-medium text-gray-900">
+    <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+      <div className="py-4 sm:py-6">
+        <section className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <header className="px-4 py-5 sm:px-6">
+            <h1 className="text-xl sm:text-2xl leading-6 font-medium text-gray-900">
               Tải video
             </h1>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            <p className="mt-2 max-w-2xl text-sm text-gray-700">
               Nhập URL video từ YouTube, Facebook, Twitter và nhiều nguồn khác để tải xuống.
-              <Link to="/supported-sites" className="text-primary-600 hover:text-primary-700 ml-1">
-                Xem danh sách các trang web được hỗ trợ
+              <Link to="/supported-sites" className="text-primary-600 hover:text-primary-700 ml-1 inline-flex items-center">
+                <span>Xem danh sách các trang web được hỗ trợ</span>
+                <svg className="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
               </Link>
             </p>
-          </div>
+          </header>
           
           {/* Thông tin gói đăng ký */}
-          <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-gray-500">Gói hiện tại:</span>
-                <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          <section className="border-t border-gray-200 px-4 py-5 sm:px-6" aria-label="Thông tin gói đăng ký">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div className="mb-3 sm:mb-0">
+                <span className="text-sm font-medium text-gray-700">Gói hiện tại:</span>
+                <span className={`ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                   user?.subscription === 'premium' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                 }`}>
                   {user?.subscription === 'premium' ? 'Premium' : 'Miễn phí'}
@@ -290,93 +293,109 @@ const VideoDownloadPage = () => {
               {user?.subscription !== 'premium' && (
                 <a
                   href="/dashboard/subscription"
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px] min-w-[140px]"
                 >
+                  <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
                   Nâng cấp lên Premium
                 </a>
               )}
             </div>
             
             {user?.subscription !== 'premium' && (
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-3 text-sm text-gray-700">
                 Bạn đang sử dụng gói Miễn phí. Giới hạn tải xuống: {settings.maxDownloadsPerDay} video/ngày, chỉ chất lượng cơ bản (≤ 720p).
               </p>
             )}
-          </div>
+          </section>
           
           {/* Form nhập URL */}
-          <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+          <section className="border-t border-gray-200 px-4 py-5 sm:px-6" aria-labelledby="url-input-heading">
+            <h2 id="url-input-heading" className="sr-only">Nhập URL video</h2>
             <form onSubmit={handleGetInfo} className="space-y-4">
               <div>
-                <label htmlFor="video-url" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="video-url" className="block text-base font-medium text-gray-700 mb-2">
                   URL Video
                 </label>
-                <div className="mt-1 flex rounded-md shadow-sm">
+                <div className="flex flex-col sm:flex-row rounded-md shadow-sm">
                   <input
-                    type="text"
+                    type="url"
                     name="video-url"
                     id="video-url"
                     value={url}
                     onChange={handleUrlChange}
-                    className="focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300"
+                    className="focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full rounded-md sm:rounded-none sm:rounded-l-md text-base border-gray-300 mb-2 sm:mb-0 min-h-[44px]"
                     placeholder="https://www.youtube.com/watch?v=..."
+                    aria-describedby="url-description"
                   />
                   <button
                     type="submit"
                     disabled={loading && !videoInfo}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+                    className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md sm:rounded-none sm:rounded-r-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px] ${
                       loading && !videoInfo ? 'opacity-70 cursor-not-allowed' : ''
                     }`}
+                    aria-busy={loading && !videoInfo}
                   >
                     {loading && !videoInfo ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Đang xử lý...
+                        <span>Đang xử lý...</span>
                       </>
                     ) : (
-                      'Lấy thông tin'
+                      <>
+                        <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <span>Lấy thông tin</span>
+                      </>
                     )}
                   </button>
                 </div>
+                <p id="url-description" className="mt-2 text-sm text-gray-500">
+                  Dán URL từ YouTube, Facebook, Twitter hoặc các trang web được hỗ trợ khác
+                </p>
               </div>
             </form>
             
             {error && (
-              <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">
-                <div className="flex">
+              <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4 rounded-md" role="alert" aria-live="assertive">
+                <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-6 w-6 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm text-red-700">{error}</p>
+                    <p className="text-base text-red-700 font-medium">{error}</p>
                   </div>
                 </div>
               </div>
             )}
-          </div>
+          </section>
           
           {/* Thông tin video */}
           {videoInfo && (
-            <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <section className="border-t border-gray-200 px-4 py-5 sm:px-6" aria-labelledby="video-info-heading">
+              <h2 id="video-info-heading" className="text-xl leading-6 font-medium text-gray-900">
                 Thông tin video
-              </h3>
+              </h2>
               
               <div className="mt-4 flex flex-col md:flex-row">
                 {videoInfo.thumbnail && (
                   <div className="flex-shrink-0 mb-4 md:mb-0 md:mr-6">
                     <img
                       src={videoInfo.thumbnail}
-                      alt={videoInfo.title}
+                      alt={videoInfo.title || "Thumbnail video"}
                       width="320"
                       height="180"
                       loading="lazy"
-                      className="w-full md:w-64 h-auto rounded-lg shadow-sm"
+                      className="w-full md:w-64 h-auto rounded-lg shadow-sm object-cover"
+                      srcSet={`${videoInfo.thumbnail} 1x, ${videoInfo.thumbnail} 2x`}
+                      sizes="(max-width: 768px) 100vw, 320px"
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = '/placeholder-thumbnail.jpg';
@@ -386,9 +405,9 @@ const VideoDownloadPage = () => {
                 )}
                 
                 <div className="flex-1">
-                  <h4 className="text-xl font-semibold">{videoInfo.title}</h4>
+                  <h3 className="text-xl font-semibold break-words">{videoInfo.title}</h3>
                   
-                  <div className="mt-2 text-sm text-gray-500">
+                  <div className="mt-3 text-base text-gray-700">
                     <p>Thời lượng: {videoInfo.duration || 'Không xác định'}</p>
                   </div>
                   
@@ -396,8 +415,12 @@ const VideoDownloadPage = () => {
                   {videoInfo.formats && videoInfo.formats.length > 0 && (
                     <div className="mt-6">
                       <div className="border-b border-gray-200">
-                        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                        <nav className="-mb-px flex flex-wrap gap-2 sm:gap-4" aria-label="Tabs định dạng" role="tablist">
                           <button
+                            id="tab-video"
+                            role="tab"
+                            aria-selected={activeTab === 'videoAudio'}
+                            aria-controls="panel-video"
                             onClick={() => {
                               setActiveTab('videoAudio');
                               setCurrentFormatType('video');
@@ -412,15 +435,22 @@ const VideoDownloadPage = () => {
                             }}
                             className={`${
                               activeTab === 'videoAudio'
-                                ? 'border-primary-500 text-primary-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                                ? 'border-primary-500 text-primary-600 bg-primary-50'
+                                : 'border-transparent text-gray-700 hover:text-gray-900 hover:border-gray-300'
+                            } whitespace-nowrap py-3 px-4 border-b-2 font-medium text-base rounded-t-md min-h-[44px] min-w-[100px] flex items-center justify-center`}
                           >
+                            <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
                             Video
                           </button>
                           
                           {videoInfo.formats.some(format => format.type === 'audio') && (
                             <button
+                              id="tab-audio"
+                              role="tab"
+                              aria-selected={activeTab === 'audioOnly'}
+                              aria-controls="panel-audio"
                               onClick={() => {
                                 setActiveTab('audioOnly');
                                 setCurrentFormatType('audio');
@@ -435,45 +465,51 @@ const VideoDownloadPage = () => {
                               }}
                               className={`${
                                 activeTab === 'audioOnly'
-                                  ? 'border-primary-500 text-primary-600'
-                                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                                  ? 'border-primary-500 text-primary-600 bg-primary-50'
+                                  : 'border-transparent text-gray-700 hover:text-gray-900 hover:border-gray-300'
+                              } whitespace-nowrap py-3 px-4 border-b-2 font-medium text-base rounded-t-md min-h-[44px] min-w-[100px] flex items-center justify-center`}
                             >
+                              <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m0 0l-2.828 2.828m0 0a9 9 0 010-12.728m2.828 2.828a5 5 0 010 7.072M3 9l3 3m0 0l-3 3m3-3H9" />
+                              </svg>
                               Chỉ âm thanh
                             </button>
                           )}
                           
                           <button
                             disabled={true}
-                            className="border-transparent text-gray-500 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center cursor-not-allowed opacity-70"
+                            className="border-transparent text-gray-500 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-base rounded-t-md flex items-center justify-center cursor-not-allowed opacity-70 min-h-[44px] min-w-[100px]"
                           >
-                            <>
-                              <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              Tải phụ đề
-                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                                Đang phát triển
-                              </span>
-                            </>
+                            <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Tải phụ đề
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Đang phát triển
+                            </span>
                           </button>
                         </nav>
                       </div>
                       
                       {/* Hiển thị các lựa chọn chất lượng đơn giản */}
                       {/* Thiết kế mới: Đặt menu chọn chất lượng, thanh tiến trình và nút tải xuống ngang hàng */}
-                      <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                         {/* Menu chọn chất lượng - chiếm 5/12 */}
-                        <div className="md:col-span-5">
-                          <h5 className="text-sm font-medium text-gray-700 mb-3">Chọn chất lượng</h5>
+                        <div
+                          id={activeTab === 'videoAudio' ? 'panel-video' : 'panel-audio'}
+                          role="tabpanel"
+                          aria-labelledby={activeTab === 'videoAudio' ? 'tab-video' : 'tab-audio'}
+                          className="lg:col-span-5"
+                        >
+                          <h4 className="text-base font-medium text-gray-700 mb-3">Chọn chất lượng</h4>
                           
-                          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-2 pb-2">
                             {filteredFormats.map((format) => (
                               <div
                                 key={format.qualityKey}
-                                className={`flex items-center p-2 rounded-md ${
+                                className={`flex items-center p-3 rounded-md ${
                                   isFormatSelected(format.format_id)
-                                    ? 'bg-primary-50 border border-primary-200'
+                                    ? 'bg-primary-50 border border-primary-200 shadow-sm'
                                     : 'bg-white border border-gray-200 hover:bg-gray-50'
                                 } ${
                                   !format.isAllowed ? 'opacity-60' : ''
@@ -494,25 +530,26 @@ const VideoDownloadPage = () => {
                                     setError(null);
                                   }}
                                   disabled={!format.isAllowed}
-                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                                  className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-300"
+                                  aria-describedby={`format-desc-${format.qualityKey}`}
                                 />
-                                <label htmlFor={`format-${format.qualityKey}`} className="ml-3 block text-sm font-medium text-gray-900 flex-grow">
+                                <label htmlFor={`format-${format.qualityKey}`} className="ml-3 block text-base font-medium text-gray-900 flex-grow cursor-pointer">
                                   <div className="flex flex-col">
-                                    <div className="flex items-center">
-                                      {format.label}
+                                    <div className="flex items-center flex-wrap">
+                                      <span className="mr-2">{format.label}</span>
                                       {!format.isAllowed && format.requirement === 'premium' && (
-                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        <span className="mt-1 inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                                           Premium
                                         </span>
                                       )}
                                       {!format.isAllowed && format.requirement === 'login' && (
-                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                        <span className="mt-1 inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
                                           Cần đăng nhập
                                         </span>
                                       )}
                                     </div>
                                     {format.fileSizeApprox && (
-                                      <span className="text-xs text-gray-500 mt-1">
+                                      <span id={`format-desc-${format.qualityKey}`} className="text-sm text-gray-500 mt-1">
                                         Kích thước ước tính: {format.fileSizeApprox}
                                       </span>
                                     )}
@@ -542,37 +579,41 @@ const VideoDownloadPage = () => {
                         </div>
                         
                         {/* Thanh tiến trình tải xuống - chiếm 4/12 */}
-                        <div className="md:col-span-4">
+                        <div className="lg:col-span-4">
                           {downloadStatus && downloadStatus !== 'failed' ? (
                             <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-3">Tiến trình tải xuống</h5>
+                              <h4 className="text-base font-medium text-gray-700 mb-3">Tiến trình tải xuống</h4>
                               <div className="relative pt-1">
-                                <div className="overflow-hidden h-2 mb-2 text-xs flex rounded bg-primary-200">
+                                <div className="overflow-hidden h-4 mb-3 text-xs flex rounded-full bg-primary-200">
                                   <div
                                     style={{ width: `${downloadProgress}%` }}
-                                    className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary-500 transition-all duration-500"
+                                    className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary-500 transition-all duration-500 rounded-full"
+                                    role="progressbar"
+                                    aria-valuenow={Math.round(downloadProgress)}
+                                    aria-valuemin="0"
+                                    aria-valuemax="100"
                                   ></div>
                                 </div>
-                                <div className="flex items-center justify-between text-xs text-gray-500">
-                                  <span>
+                                <div className="flex items-center justify-between text-sm text-gray-700">
+                                  <span className="font-medium">
                                     {downloadStatus === 'pending' && 'Đang chuẩn bị...'}
                                     {downloadStatus === 'processing' && 'Đang xử lý...'}
                                     {downloadStatus === 'completed' && 'Hoàn thành!'}
                                     {downloadStatus === 'downloading' && 'Đang tải xuống...'}
                                   </span>
-                                  <span>{downloadProgress.toFixed(1)}%</span>
+                                  <span className="font-medium">{downloadProgress.toFixed(1)}%</span>
                                 </div>
                               </div>
                             </div>
                           ) : (
-                            <div className="h-full flex items-center justify-center">
-                              <p className="text-sm text-gray-500 italic">Tiến trình sẽ hiển thị khi bắt đầu tải xuống</p>
+                            <div className="h-full flex items-center justify-center p-4 border border-dashed border-gray-300 rounded-md bg-gray-50">
+                              <p className="text-base text-gray-500 text-center">Tiến trình sẽ hiển thị khi bắt đầu tải xuống</p>
                             </div>
                           )}
                         </div>
                         
                         {/* Nút tải xuống - chiếm 3/12 */}
-                        <div className="md:col-span-3 flex flex-col items-center justify-center h-full">
+                        <div className="lg:col-span-3 flex flex-col items-center justify-center h-full">
                           <button
                             type="button"
                             onClick={downloadStatus === 'completed' && videoId ?
@@ -662,49 +703,63 @@ const VideoDownloadPage = () => {
                               handleDownload
                             }
                             disabled={loading || !selectedFormat}
-                            className={`w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                            className={`w-full inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-md text-white ${
                               downloadStatus === 'completed' && videoId
                                 ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
                                 : 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500'
                             } focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                               loading || !selectedFormat ? 'opacity-70 cursor-not-allowed' : ''
-                            }`}
+                            } min-h-[50px]`}
+                            aria-busy={loading}
+                            aria-disabled={loading || !selectedFormat}
                           >
                             {loading && downloadStatus !== 'completed' ? (
                               <>
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Đang xử lý...
+                                <span>Đang xử lý...</span>
                               </>
                             ) : downloadStatus === 'completed' && videoId ? (
                               <>
-                                <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="-ml-1 mr-3 h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                Tải xuống tệp
+                                <span>Tải xuống tệp</span>
                               </>
                             ) : (
                               <>
-                                <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="-ml-1 mr-3 h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
-                                Bắt đầu xử lý
+                                <span>Bắt đầu xử lý</span>
                               </>
                             )}
                           </button>
                           
                           {/* Thêm mô tả quy trình */}
-                          <div className="mt-2 text-xs text-gray-500 text-center">
+                          <div className="mt-3 text-sm text-gray-700 text-center bg-gray-50 p-3 rounded-md border border-gray-200">
                             {!downloadStatus && (
-                              <p>Bước 1: Chọn định dạng và bắt đầu xử lý</p>
+                              <p className="flex items-center justify-center">
+                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-800 mr-2 font-bold">1</span>
+                                Chọn định dạng và bắt đầu xử lý
+                              </p>
                             )}
                             {(downloadStatus === 'pending' || downloadStatus === 'processing') && (
-                              <p>Đang xử lý video, vui lòng đợi...</p>
+                              <p className="flex items-center justify-center">
+                                <svg className="animate-spin mr-2 h-5 w-5 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Đang xử lý video, vui lòng đợi...
+                              </p>
                             )}
                             {downloadStatus === 'completed' && (
-                              <p>Bước 2: Nhấn nút để tải xuống tệp</p>
+                              <p className="flex items-center justify-center">
+                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-800 mr-2 font-bold">2</span>
+                                Nhấn nút để tải xuống tệp
+                              </p>
                             )}
                           </div>
                         </div>
@@ -731,13 +786,14 @@ const VideoDownloadPage = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </section>
           )}
           
           {/* Modal danh sách phụ đề */}
           {showSubtitlesModal && (
-            <div className="fixed z-10 inset-0 overflow-y-auto">
+            <div className="fixed z-10 inset-0 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="subtitle-modal-title">
               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                {/* Overlay */}
                 <div className="fixed inset-0 transition-opacity" aria-hidden="true">
                   <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
                 </div>
@@ -748,28 +804,29 @@ const VideoDownloadPage = () => {
                   <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div className="sm:flex sm:items-start">
                       <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        <h3 id="subtitle-modal-title" className="text-xl leading-6 font-medium text-gray-900">
                           Phụ đề có sẵn
                         </h3>
-                        <div className="mt-4 max-h-60 overflow-y-auto">
+                        <div className="mt-4 max-h-80 overflow-y-auto">
                           {subtitles.length === 0 ? (
-                            <p className="text-sm text-gray-500">Không tìm thấy phụ đề cho video này.</p>
+                            <p className="text-base text-gray-700 p-4 bg-gray-50 rounded-md">Không tìm thấy phụ đề cho video này.</p>
                           ) : (
-                            <ul className="divide-y divide-gray-200">
+                            <ul className="divide-y divide-gray-200" role="list">
                               {subtitles.map((subtitle) => (
-                                <li key={subtitle.langCode} className="py-3">
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-900">{subtitle.langName}</p>
-                                      <p className="text-xs text-gray-500">Mã ngôn ngữ: {subtitle.langCode}</p>
+                                <li key={subtitle.langCode} className="py-4">
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="mb-3 sm:mb-0">
+                                      <p className="text-base font-medium text-gray-900">{subtitle.langName}</p>
+                                      <p className="text-sm text-gray-700">Mã ngôn ngữ: {subtitle.langCode}</p>
                                     </div>
-                                    <div className="flex space-x-2">
+                                    <div className="flex flex-wrap gap-2">
                                       {subtitle.formats.map((format) => (
                                         <button
                                           key={`${subtitle.langCode}-${format}`}
                                           type="button"
                                           onClick={() => handleDownloadSubtitle(subtitle.langCode, format)}
-                                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px] min-w-[60px]"
+                                          aria-label={`Tải phụ đề ${subtitle.langName} định dạng ${format}`}
                                         >
                                           {format.toUpperCase()}
                                         </button>
@@ -788,8 +845,11 @@ const VideoDownloadPage = () => {
                     <button
                       type="button"
                       onClick={() => setShowSubtitlesModal(false)}
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                      className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto min-h-[44px]"
                     >
+                      <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                       Đóng
                     </button>
                   </div>
@@ -797,9 +857,9 @@ const VideoDownloadPage = () => {
               </div>
             </div>
           )}
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 };
 

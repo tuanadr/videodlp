@@ -18,11 +18,11 @@
     "defaultImage": "/logo512.png",
     "twitterHandle": "@videodownloader",
     "googleAnalyticsId": "",
-    "facebookAppId": "",
+    "facebookAppId": "sds",
     "enableStructuredData": true,
     "enableOpenGraph": true,
     "enableTwitterCards": true,
     "enableCanonicalUrls": true
   },
-  "updatedAt": "2025-05-15T14:03:54.373Z"
+  "updatedAt": "2025-05-15T14:17:25.959Z"
 }

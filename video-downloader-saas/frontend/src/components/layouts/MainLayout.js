@@ -5,9 +5,10 @@ import Footer from '../ui/Footer';
 
 const MainLayout = () => {
   return (
-    <div className="flex flex-col min-h-screen">
+    // Thay thế div bằng thẻ semantic
+    <div className="flex flex-col min-h-screen" role="document">
       <Navbar />
-      <main className="flex-grow">
+      <main className="flex-grow" id="main-content">
         <Outlet />
       </main>
       <Footer />

@@ -5,18 +5,18 @@ const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-white border-t border-gray-200">
+    <footer className="bg-white border-t border-gray-200" role="contentinfo" aria-label="Chân trang">
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
-          <div className="space-y-8 xl:col-span-1">
-            <Link to="/" className="text-2xl font-bold text-primary-600">
+          <section className="space-y-8 xl:col-span-1">
+            <Link to="/" className="text-2xl font-bold text-primary-600" aria-label="Về trang chủ">
               VideoDownloader
             </Link>
-            <p className="text-gray-500 text-base">
+            <p className="text-gray-700 text-base">
               Dịch vụ tải video trực tuyến từ nhiều nguồn khác nhau. Dễ dàng, nhanh chóng và an toàn.
             </p>
-            <div className="flex space-x-6">
-              <a href="#" className="text-gray-400 hover:text-gray-500">
+            <nav className="flex space-x-6" aria-label="Mạng xã hội">
+              <a href="#" className="text-gray-400 hover:text-gray-500" aria-label="Facebook">
                 <span className="sr-only">Facebook</span>
                 <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -26,7 +26,7 @@ const Footer = () => {
                   />
                 </svg>
               </a>
-              <a href="#" className="text-gray-400 hover:text-gray-500">
+              <a href="#" className="text-gray-400 hover:text-gray-500" aria-label="Twitter">
                 <span className="sr-only">Twitter</span>
                 <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -34,7 +34,7 @@ const Footer = () => {
                   />
                 </svg>
               </a>
-              <a href="#" className="text-gray-400 hover:text-gray-500">
+              <a href="#" className="text-gray-400 hover:text-gray-500" aria-label="GitHub">
                 <span className="sr-only">GitHub</span>
                 <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -44,77 +44,77 @@ const Footer = () => {
                   />
                 </svg>
               </a>
-            </div>
-          </div>
+            </nav>
+          </section>
           <div className="mt-12 grid grid-cols-2 gap-8 xl:mt-0 xl:col-span-2">
-            <div className="md:grid md:grid-cols-2 md:gap-8">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Dịch vụ</h3>
-                <ul className="mt-4 space-y-4">
+            <nav className="md:grid md:grid-cols-2 md:gap-8" aria-label="Liên kết dịch vụ và hỗ trợ">
+              <section>
+                <h2 className="text-sm font-semibold text-gray-700 tracking-wider uppercase">Dịch vụ</h2>
+                <ul className="mt-4 space-y-4" role="list">
                   <li>
-                    <Link to="/dashboard/download" className="text-base text-gray-500 hover:text-gray-900">
+                    <Link to="/dashboard/download" className="text-base text-gray-700 hover:text-gray-900">
                       Tải video
                     </Link>
                   </li>
                   <li>
-                    <Link to="/dashboard/subscription" className="text-base text-gray-500 hover:text-gray-900">
+                    <Link to="/dashboard/subscription" className="text-base text-gray-700 hover:text-gray-900">
                       Gói Premium
                     </Link>
                   </li>
                 </ul>
-              </div>
-              <div className="mt-12 md:mt-0">
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Hỗ trợ</h3>
-                <ul className="mt-4 space-y-4">
+              </section>
+              <section className="mt-12 md:mt-0">
+                <h2 className="text-sm font-semibold text-gray-700 tracking-wider uppercase">Hỗ trợ</h2>
+                <ul className="mt-4 space-y-4" role="list">
                   <li>
-                    <a href="#" className="text-base text-gray-500 hover:text-gray-900">
+                    <a href="#" className="text-base text-gray-700 hover:text-gray-900">
                       Trung tâm trợ giúp
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="text-base text-gray-500 hover:text-gray-900">
+                    <a href="#" className="text-base text-gray-700 hover:text-gray-900">
                       Liên hệ
                     </a>
                   </li>
                 </ul>
-              </div>
-            </div>
-            <div className="md:grid md:grid-cols-2 md:gap-8">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Công ty</h3>
-                <ul className="mt-4 space-y-4">
+              </section>
+            </nav>
+            <nav className="md:grid md:grid-cols-2 md:gap-8" aria-label="Liên kết công ty và pháp lý">
+              <section>
+                <h2 className="text-sm font-semibold text-gray-700 tracking-wider uppercase">Công ty</h2>
+                <ul className="mt-4 space-y-4" role="list">
                   <li>
-                    <a href="#" className="text-base text-gray-500 hover:text-gray-900">
+                    <a href="#" className="text-base text-gray-700 hover:text-gray-900">
                       Giới thiệu
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="text-base text-gray-500 hover:text-gray-900">
+                    <a href="#" className="text-base text-gray-700 hover:text-gray-900">
                       Blog
                     </a>
                   </li>
                 </ul>
-              </div>
-              <div className="mt-12 md:mt-0">
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Pháp lý</h3>
-                <ul className="mt-4 space-y-4">
+              </section>
+              <section className="mt-12 md:mt-0">
+                <h2 className="text-sm font-semibold text-gray-700 tracking-wider uppercase">Pháp lý</h2>
+                <ul className="mt-4 space-y-4" role="list">
                   <li>
-                    <a href="#" className="text-base text-gray-500 hover:text-gray-900">
+                    <a href="#" className="text-base text-gray-700 hover:text-gray-900">
                       Chính sách bảo mật
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="text-base text-gray-500 hover:text-gray-900">
+                    <a href="#" className="text-base text-gray-700 hover:text-gray-900">
                       Điều khoản sử dụng
                     </a>
                   </li>
                 </ul>
-              </div>
-            </div>
+              </section>
+            </nav>
           </div>
         </div>
         <div className="mt-12 border-t border-gray-200 pt-8">
-          <p className="text-base text-gray-400 xl:text-center">
+          <p className="text-base text-gray-700 xl:text-center">
             &copy; {currentYear} VideoDownloader. Tất cả các quyền được bảo lưu.
           </p>
         </div>

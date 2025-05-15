@@ -3,8 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 100%;
+  }
+  
   body {
     @apply bg-gray-50 text-gray-900;
+    line-height: 1.6;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -13,14 +18,31 @@
 
   h1 {
     @apply text-3xl md:text-4xl;
+    margin-bottom: 0.5rem;
   }
 
   h2 {
     @apply text-2xl md:text-3xl;
+    margin-bottom: 0.5rem;
   }
 
   h3 {
     @apply text-xl md:text-2xl;
+    margin-bottom: 0.5rem;
+  }
+  
+  p, li {
+    line-height: 1.6;
+  }
+  
+  /* Cải thiện focus styles */
+  :focus {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+  
+  /* Đảm bảo các phần tử tương tác có kích thước đủ lớn */
+  button, a, [role="button"] {
+    min-height: 2.5rem;
   }
 }
 
