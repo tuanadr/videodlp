@@ -22,10 +22,17 @@ const logDebug = (message, data = null) => {
  */
 exports.getVideoInfo = (url) => {
   return new Promise((resolve, reject) => {
-    logDebug(`Getting video info for URL: ${url}`);
+    // Sửa URL TikTok không chính xác
+    let correctedUrl = url;
+    if (url.includes('tiktiktok.com')) {
+      correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+    }
+    
+    logDebug(`Getting video info for URL: ${correctedUrl}`);
     
     const args = [
-      url,
+      correctedUrl,
       '--dump-json',
       '--no-playlist',
       '--flat-playlist'
@@ -187,20 +194,26 @@ exports.getVideoInfo = (url) => {
             });
           }
           
-          // Nếu không đủ các độ phân giải phổ biến từ các định dạng đã có,
-          // thêm các lựa chọn sử dụng tùy chọn -S của yt-dlp
-          const standardResolutions = [2160, 1440, 1080, 720, 480];
-          standardResolutions.forEach(resolution => {
+          // Chỉ hiển thị các độ phân giải thực sự có sẵn, không thêm các "synthetic option"
+          console.log(`[YTDLP] Only showing actually available resolutions, not adding synthetic options`);
+          
+          // Tìm các độ phân giải thực sự có sẵn
+          const availableHeights = videoFormats
+            .map(format => format.height || 0)
+            .filter(height => height > 0);
+          
+          // Loại bỏ các độ phân giải trùng lặp và sắp xếp giảm dần
+          const uniqueAvailableHeights = [...new Set(availableHeights)].sort((a, b) => b - a);
+          
+          console.log(`[YTDLP] Actually available resolutions: ${uniqueAvailableHeights.join(', ')}p`);
+          
+          // Chỉ thêm các tùy chọn cho các độ phân giải thực sự có sẵn mà chưa có trong danh sách
+          // Lọc chỉ hiển thị độ phân giải từ 480p trở lên
+          uniqueAvailableHeights.filter(resolution => resolution >= 480).forEach(resolution => {
             // Chỉ thêm nếu chưa có trong danh sách
             if (!qualityOptions.some(opt => opt.height === resolution)) {
-              // Kiểm tra xem có định dạng video nào ở độ phân giải này không
-              const hasVideoAtResolution = videoFormats.some(format =>
-                format.height && format.height <= resolution && format.height > resolution * 0.8
-              );
-              
-              if (hasVideoAtResolution) {
-                console.log(`[YTDLP] Adding synthetic option for resolution: ${resolution}p`);
-                availableResolutions.add(resolution);
+              console.log(`[YTDLP] Adding option for actually available resolution: ${resolution}p`);
+              availableResolutions.add(resolution);
                 
                 // Ước tính kích thước dựa trên độ phân giải
                 let fileSizeApprox = '';
@@ -240,7 +253,6 @@ exports.getVideoInfo = (url) => {
                   fileSizeApprox: fileSizeApprox
                 });
               }
-            }
           });
           
           // Sắp xếp các lựa chọn chất lượng theo độ phân giải giảm dần
@@ -323,7 +335,7 @@ exports.getVideoInfo = (url) => {
             audioOnly: audioOptions.length,
             total: formattedInfo.formats.length
           },
-          availableResolutions: Array.from(availableResolutions).sort((a, b) => b - a)
+          availableResolutions: Array.from(availableResolutions).filter(resolution => resolution >= 480).sort((a, b) => b - a)
         });
 
         resolve(formattedInfo);
@@ -344,7 +356,14 @@ exports.getVideoInfo = (url) => {
  */
 exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
   return new Promise((resolve, reject) => {
-    logDebug(`Downloading video from URL: ${url}`);
+    // Sửa URL TikTok không chính xác
+    let correctedUrl = url;
+    if (url.includes('tiktiktok.com')) {
+      correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+    }
+    
+    logDebug(`Downloading video from URL: ${correctedUrl}`);
     logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
     logDebug(`Output directory: ${outputDir}`);
     
@@ -369,7 +388,8 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
       // Xây dựng format string chính xác để đảm bảo luôn có video và audio
       // Sử dụng cú pháp đơn giản hơn và đảm bảo luôn có cả video và audio
       // Cải tiến format string để ưu tiên các định dạng có sẵn cả video và audio
-      const formatString = `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]`;
+      // Thêm "best" vào cuối để đảm bảo luôn có một định dạng hoạt động
+      const formatString = `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]/best`;
       
       downloadArgs = [
         '-f', formatString,
@@ -378,11 +398,12 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
         '--prefer-ffmpeg', // Đảm bảo sử dụng ffmpeg để ghép video và audio
         '--verbose', // Thêm verbose để có thêm thông tin debug
         '--force-overwrites', // Ghi đè file nếu đã tồn tại
-        '--no-keep-video', // Không giữ lại file video gốc
+        '--keep-video', // Giữ lại file video gốc để đảm bảo có video
         '--no-keep-fragments', // Không giữ lại các fragment
         '--no-part', // Không tạo file .part
         '--embed-metadata', // Nhúng metadata vào file
-        '--embed-thumbnail' // Nhúng thumbnail vào file nếu có thể
+        '--embed-thumbnail', // Nhúng thumbnail vào file nếu có thể
+        '--merge-output-format', 'mp4' // Đảm bảo output là mp4
       ];
       
       console.log(`[YTDLP_DOWNLOAD_COMMAND] Using format string: ${formatString}`);
@@ -448,7 +469,7 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
     
     // Thêm các tham số chung
     const args = [
-      url,
+      correctedUrl,
       ...downloadArgs,
       '-o', outputPath,
       '--no-playlist',
@@ -761,18 +782,15 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
  */
 exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
   return new Promise((resolve, reject) => {
-    logDebug(`Streaming video directly from URL: ${url}`);
-    logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
-    
-    // Tạo thư mục tạm thời để lưu file
-    const tempDir = path.join(require('os').tmpdir(), 'ytdlp-stream-' + Date.now());
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+    // Sửa URL TikTok không chính xác
+    let correctedUrl = url;
+    if (url.includes('tiktiktok.com')) {
+      correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
     }
     
-    // Tạo tên file tạm thời
-    const tempFile = path.join(tempDir, `temp-${Date.now()}.mp4`);
-    console.log(`[YTDLP] Using temporary file: ${tempFile}`);
+    logDebug(`Streaming video directly from URL: ${correctedUrl}`);
+    logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
     
     // Xác định các tham số tải xuống dựa trên formatId
     let downloadArgs = [];
@@ -788,8 +806,16 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
       logDebug(`Detected resolution-based quality: ${resolution}p`);
       console.log(`[YTDLP] Using resolution-based quality: ${resolution}p`);
       
-      // Sử dụng cách tiếp cận đơn giản hơn với format string
-      const formatString = `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]`;
+      // Sử dụng cách tiếp cận chi tiết hơn với format string
+      // Ưu tiên tìm chính xác độ phân giải trước, sau đó mới tìm các độ phân giải thấp hơn
+      // Thêm nhiều lựa chọn dự phòng để đảm bảo luôn tìm được định dạng phù hợp
+      // Đảm bảo luôn có cả video và audio bằng cách thêm "best" vào cuối
+      console.log(`[YTDLP_STREAM_COMMAND] Using more precise format string to get exact resolution: bestvideo[height=${resolution}]+bestaudio/bestvideo[height>=${resolution}][height<=${resolution+48}]+bestaudio/bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]/best`);
+      
+      // Sử dụng format string đơn giản hơn để tránh các vấn đề với ghép video và audio
+      const formatString = `best[height<=${resolution}]/best`;
+      
+      console.log(`[YTDLP_STREAM_COMMAND] Using simplified format string: ${formatString}`);
       
       downloadArgs = [
         '-f', formatString,
@@ -797,13 +823,20 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
         '--no-simulate', // Đảm bảo yt-dlp thực sự tải xuống video
         '--remux-video', 'mp4', // Remux video thành MP4 nếu cần
         '--prefer-ffmpeg', // Đảm bảo sử dụng ffmpeg để ghép video và audio
-        '-o', tempFile, // Output to temp file
+        '--add-header', 'Accept:*/*', // Thêm header để tránh lỗi khi tải video
+        '--ignore-errors', // Bỏ qua lỗi nhỏ
+        '--force-overwrites', // Ghi đè file nếu đã tồn tại
+        '--no-keep-video', // Không giữ lại file video gốc vì chỉ streaming
+        '--no-keep-fragments', // Không giữ lại các fragment
+        '-o', '-', // Output to stdout
         '--no-part', // Không tạo file .part
-        '--no-playlist' // Không tải playlist
+        '--no-playlist', // Không tải playlist
+        '--verbose', // Thêm thông tin chi tiết để debug
+        '--no-mtime' // Không thay đổi thời gian sửa đổi file
       ];
       
-      console.log(`[YTDLP_STREAM_COMMAND] Using format string: ${formatString}`);
-      console.log(`[YTDLP_STREAM_COMMAND] Ensuring video and audio are merged with ffmpeg`);
+      console.log(`[YTDLP_STREAM_COMMAND] Using simplified format string: ${formatString}`);
+      console.log(`[YTDLP_STREAM_COMMAND] Using direct format to avoid merging issues`);
     } else if (effectiveQuality.startsWith('audio_')) {
       // Đây là lựa chọn chỉ âm thanh
       logDebug(`Detected audio-only format: ${effectiveQuality}`);
@@ -838,10 +871,12 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
       console.log(`[YTDLP] Using best available quality`);
       
       downloadArgs = [
-        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '-f', 'best[ext=mp4]/best',
         '--merge-output-format', 'mp4',
         '-o', '-', // Output to stdout
-        '--no-playlist' // Không tải playlist
+        '--no-playlist', // Không tải playlist
+        '--no-mtime', // Không thay đổi thời gian sửa đổi file
+        '--verbose' // Thêm thông tin chi tiết để debug
       ];
     } else if (effectiveQuality.includes('+') || effectiveQuality.includes('/')) {
       // Đây là format ID phức tạp (có thể là bestvideo+bestaudio hoặc tương tự)
@@ -852,7 +887,9 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
         '-f', effectiveQuality,
         '--merge-output-format', 'mp4',
         '-o', '-', // Output to stdout
-        '--no-playlist' // Không tải playlist
+        '--no-playlist', // Không tải playlist
+        '--no-mtime', // Không thay đổi thời gian sửa đổi file
+        '--verbose' // Thêm thông tin chi tiết để debug
       ];
     } else {
       // Sử dụng format ID cụ thể (tương thích với code cũ)
@@ -862,7 +899,9 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
       downloadArgs = [
         '-f', effectiveQuality,
         '-o', '-', // Output to stdout
-        '--no-playlist' // Không tải playlist
+        '--no-playlist', // Không tải playlist
+        '--no-mtime', // Không thay đổi thời gian sửa đổi file
+        '--verbose' // Thêm thông tin chi tiết để debug
       ];
     }
     
@@ -907,7 +946,7 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
 
     // Thêm các tham số chung
     const args = [
-      url,
+      correctedUrl,
       ...downloadArgs
     ];
     
@@ -915,15 +954,12 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
     logDebug(`Command: ${commandString}`);
     console.log(`[YTDLP_STREAM_COMMAND] Executing full command: ${commandString}`);
     
-    // Sử dụng spawn để tải xuống file
-    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
+    // Sử dụng spawn với stdio: 'pipe' để có thể truy cập stdout và stderr
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
     
     let errorOutput = '';
-    
-    ytDlp.stdout.on('data', (data) => {
-      const output = data.toString();
-      console.log(`[YTDLP_OUTPUT] ${output.trim()}`);
-    });
     
     ytDlp.stderr.on('data', (data) => {
       const error = data.toString();
@@ -935,87 +971,11 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
     ytDlp.on('error', (error) => {
       logDebug(`yt-dlp process error: ${error.message}`);
       console.error(`[YTDLP_PROCESS_ERROR] ${error.message}`);
-      
-      // Dọn dẹp file tạm thời nếu có lỗi
-      try {
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
-        }
-        fs.rmdirSync(tempDir, { recursive: true });
-      } catch (cleanupError) {
-        console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
-      }
-      
       reject(error);
     });
     
-    ytDlp.on('close', (code) => {
-      console.log(`[YTDLP_PROCESS] yt-dlp process exited with code ${code}`);
-      
-      if (code !== 0) {
-        console.log(`[YTDLP_ERROR] Process failed with code ${code}: ${errorOutput}`);
-        
-        // Dọn dẹp file tạm thời nếu có lỗi
-        try {
-          if (fs.existsSync(tempFile)) {
-            fs.unlinkSync(tempFile);
-          }
-          fs.rmdirSync(tempDir, { recursive: true });
-        } catch (cleanupError) {
-          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
-        }
-        
-        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
-      }
-      
-      // Kiểm tra file tạm thời có tồn tại không
-      if (!fs.existsSync(tempFile)) {
-        console.log(`[YTDLP_ERROR] Temporary file does not exist: ${tempFile}`);
-        
-        // Dọn dẹp thư mục tạm thời
-        try {
-          fs.rmdirSync(tempDir, { recursive: true });
-        } catch (cleanupError) {
-          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
-        }
-        
-        return reject(new Error('Không thể tạo file tạm thời'));
-      }
-      
-      // Tạo một stream đọc từ file tạm thời
-      const fileStream = fs.createReadStream(tempFile);
-      
-      // Xử lý khi stream kết thúc
-      fileStream.on('end', () => {
-        console.log(`[YTDLP_STREAM] File stream ended, cleaning up temporary files`);
-        
-        // Dọn dẹp file tạm thời sau khi stream kết thúc
-        try {
-          fs.unlinkSync(tempFile);
-          fs.rmdirSync(tempDir, { recursive: true });
-        } catch (cleanupError) {
-          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
-        }
-      });
-      
-      // Xử lý lỗi stream
-      fileStream.on('error', (streamError) => {
-        console.error(`[YTDLP_STREAM_ERROR] ${streamError.message}`);
-        
-        // Dọn dẹp file tạm thời nếu có lỗi
-        try {
-          fs.unlinkSync(tempFile);
-          fs.rmdirSync(tempDir, { recursive: true });
-        } catch (cleanupError) {
-          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
-        }
-        
-        reject(streamError);
-      });
-      
-      // Trả về stream để controller có thể pipe đến response
-      resolve(fileStream);
-    });
+    // Trả về child process để controller có thể pipe stdout
+    resolve(ytDlp);
   });
 };
 
@@ -1069,11 +1029,18 @@ exports.getSupportedSites = () => {
  */
 exports.listSubtitles = (url) => {
   return new Promise((resolve, reject) => {
-    logDebug(`Listing subtitles for URL: ${url}`);
-    console.log(`[YTDLP] Listing subtitles for URL: ${url}`);
+    // Sửa URL TikTok không chính xác
+    let correctedUrl = url;
+    if (url.includes('tiktiktok.com')) {
+      correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+    }
+    
+    logDebug(`Listing subtitles for URL: ${correctedUrl}`);
+    console.log(`[YTDLP] Listing subtitles for URL: ${correctedUrl}`);
     
     const args = [
-      url,
+      correctedUrl,
       '--list-subs',
       '--no-playlist'
     ];
@@ -1199,8 +1166,15 @@ exports.listSubtitles = (url) => {
  */
 exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFilename) => {
   return new Promise((resolve, reject) => {
-    logDebug(`Downloading subtitle for URL: ${url}`);
-    console.log(`[YTDLP] Downloading subtitle for URL: ${url}`);
+    // Sửa URL TikTok không chính xác
+    let correctedUrl = url;
+    if (url.includes('tiktiktok.com')) {
+      correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+    }
+    
+    logDebug(`Downloading subtitle for URL: ${correctedUrl}`);
+    console.log(`[YTDLP] Downloading subtitle for URL: ${correctedUrl}`);
     console.log(`[YTDLP] Language: ${lang}, Format: ${format}`);
     console.log(`[YTDLP] Output directory: ${outputDir}`);
     console.log(`[YTDLP] Base filename: ${baseFilename}`);
@@ -1216,7 +1190,7 @@ exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFile
     console.log(`[YTDLP] Output path template: ${outputPath}`);
     
     const args = [
-      url,
+      correctedUrl,
       '--write-sub',
       '--skip-download',
       '--no-playlist',

@@ -211,15 +211,24 @@ exports.streamVideo = catchAsync(async (req, res, next) => {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     
-    // Gọi hàm streamVideoDirectly để lấy stream từ file tạm thời
-    const fileStream = await ytdlp.streamVideoDirectly(url, formatId, qualityKey);
+    // Sử dụng Transfer-Encoding: chunked để hiển thị tiến trình tải xuống
+    res.setHeader('Transfer-Encoding', 'chunked');
     
-    // Pipe stream từ file tạm thời vào response
-    fileStream.pipe(res);
+    // Gọi hàm streamVideoDirectly để lấy child process
+    const ytDlpProcess = await ytdlp.streamVideoDirectly(url, formatId, qualityKey);
     
-    // Xử lý lỗi từ stream
-    fileStream.on('error', (error) => {
-      console.error(`[${new Date().toISOString()}] [STREAM_ERROR]`, error);
+    // Pipe stdout của yt-dlp vào response
+    ytDlpProcess.stdout.pipe(res);
+    
+    // Xử lý lỗi từ stderr
+    ytDlpProcess.stderr.on('data', (data) => {
+      console.error(`[${new Date().toISOString()}] [YTDLP_STDERR]: ${data.toString()}`);
+      // Không gửi response lỗi ở đây nếu header đã được gửi, nhưng cần log lại
+    });
+    
+    // Xử lý lỗi từ process
+    ytDlpProcess.on('error', (error) => {
+      console.error(`[${new Date().toISOString()}] [YTDLP_PROCESS_ERROR]`, error);
       if (!res.headersSent) {
         res.status(500).json({ success: false, message: 'Lỗi khi xử lý video từ nguồn.' });
       } else {
@@ -228,18 +237,24 @@ exports.streamVideo = catchAsync(async (req, res, next) => {
       }
     });
     
-    // Xử lý khi stream kết thúc
-    fileStream.on('end', () => {
-      console.log(`[${new Date().toISOString()}] [STREAM_END] Stream finished for URL: ${url}`);
-      if (!res.writableEnded) { // Đảm bảo response được kết thúc
+    // Xử lý khi process kết thúc
+    ytDlpProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`[${new Date().toISOString()}] [YTDLP_PROCESS_CLOSE] yt-dlp exited with code ${code}`);
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, message: 'Lỗi khi tải video từ nguồn.' });
+        }
+      }
+      console.log(`[${new Date().toISOString()}] [YTDLP_PROCESS_CLOSE] Stream finished for URL: ${url}`);
+      if (!res.writableEnded) { // Đảm bảo response được kết thúc nếu yt-dlp kết thúc mà chưa gửi hết
         res.end();
       }
     });
     
     // Xử lý client ngắt kết nối
     req.on('close', () => {
-      console.log(`[${new Date().toISOString()}] [CLIENT_DISCONNECT] Client disconnected, destroying file stream.`);
-      fileStream.destroy(); // Hủy stream khi client ngắt kết nối
+      console.log(`[${new Date().toISOString()}] [CLIENT_DISCONNECT] Client disconnected, killing yt-dlp process.`);
+      ytDlpProcess.kill('SIGKILL'); // Hoặc SIGTERM
     });
     
     // Cập nhật thống kê tải xuống (nếu cần)
