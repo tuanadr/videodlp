@@ -1,7 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 const videoService = require('../services/videoService');
+const ytdlp = require('../utils/ytdlp');
 const { catchAsync } = require('../utils/errorHandler');
+const { getSettings } = require('../utils/settings');
+const User = require('../models/User');
+const Video = require('../models/Video');
 
 /**
  * Lấy thông tin video từ URL
@@ -22,31 +26,8 @@ exports.getVideoInfo = catchAsync(async (req, res, next) => {
  * Bắt đầu quá trình tải xuống video
  */
 exports.downloadVideo = catchAsync(async (req, res, next) => {
-  let { url, formatId, title, formatType, qualityKey } = req.body;
-  
-  // Giải mã HTML entities trong formatId
-  formatId = decodeHtmlEntities(formatId);
-  
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] downloadVideo request received`, { 
-    url, formatId, title, user: req.user ? req.user.id : 'anonymous' 
-  });
-
-  const result = await videoService.downloadVideo({
-    url, formatId, title, formatType, qualityKey
-  }, req.user);
-  
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Processing video download request`, {
-    videoId: result.videoId,
-    usingQueue: result.processingMode === 'queue',
-    redisAvailable: isRedisAvailable()
-  });
-
-  // Trả về ID video để client có thể kiểm tra trạng thái
-  res.status(202).json({
-    success: true,
-    message: 'Đang xử lý yêu cầu',
-    data: result
-  });
+  // Chuyển hướng đến hàm streamVideo để xử lý trực tiếp
+  return streamVideo(req, res, next);
 });
 
 /**
@@ -86,48 +67,198 @@ exports.deleteVideo = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Stream video
+ * Stream video trực tiếp từ nguồn đến client
  */
 exports.streamVideo = catchAsync(async (req, res, next) => {
-  const videoId = req.params.id;
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Stream video request for ID: ${videoId}`, {
-    user: req.user ? { id: req.user.id, role: req.user.role } : 'anonymous',
-    headers: req.headers
-  });
+  // Xử lý cả hai trường hợp: GET request với ID và POST request với thông tin đầy đủ
+  let url, formatId, title, formatType, qualityKey;
   
-  const status = await videoService.getVideoStatus(videoId, req.user);
-  
-  if (status.status !== 'completed' || !status.downloadPath || !fs.existsSync(status.downloadPath)) {
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Video not ready or file not found: ${videoId}`, {
-      status: status.status,
-      path: status.downloadPath,
-      exists: status.downloadPath ? fs.existsSync(status.downloadPath) : false
+  if (req.method === 'GET') {
+    // Trường hợp GET /api/videos/:id/download (tương thích ngược)
+    const videoId = req.params.id;
+    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Stream video request for ID: ${videoId}`, {
+      user: req.user ? { id: req.user.id, role: req.user.role } : 'anonymous',
+      headers: req.headers
     });
-    return res.status(400).json({ success: false, message: 'Video chưa sẵn sàng hoặc file không tồn tại.' });
-  }
-
-  const fileName = path.basename(status.downloadPath);
-  const fileType = status.fileType || path.extname(fileName).toLowerCase().replace('.', '');
-  const desiredFilename = `${status.title || 'video'}.${fileType}`.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ');
-  
-  const mimeType = getMimeType(`.${fileType}`);
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Streaming file: ${status.downloadPath}`, { mimeType, desiredFilename });
-  
-  res.setHeader('Content-Type', mimeType);
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(desiredFilename)}"`);
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-
-  const fileStream = fs.createReadStream(status.downloadPath);
-  fileStream.on('error', (err) => {
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Error streaming file`, { error: err.message, path: status.downloadPath });
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, message: 'Lỗi khi đọc file video' });
+    
+    // Tìm thông tin video từ ID (nếu cần)
+    try {
+      const video = await Video.findById(videoId);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy video.' });
+      }
+      
+      // Kiểm tra quyền truy cập
+      if (video.user && (!req.user || (video.user.toString() !== req.user.id && req.user.role !== 'admin'))) {
+        return res.status(403).json({ success: false, message: 'Không có quyền truy cập video này.' });
+      }
+      
+      url = video.url;
+      formatId = video.formatId;
+      title = video.title;
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Error finding video:`, error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi tìm thông tin video.' });
     }
+  } else {
+    // Trường hợp POST /api/videos/stream hoặc POST /api/videos/download
+    ({ url, formatId, title, formatType, qualityKey } = req.body);
+  }
+  
+  // Giải mã HTML entities trong formatId
+  formatId = decodeHtmlEntities(formatId);
+  
+  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Streaming video directly from URL: ${url}`, {
+    formatId, title, user: req.user ? req.user.id : 'anonymous'
   });
-  fileStream.pipe(res);
-  res.on('finish', () => console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] File streaming completed successfully`));
+
+  try {
+    // Kiểm tra quyền truy cập và giới hạn tải xuống
+    // Đây là phần kiểm tra quyền truy cập, có thể tái sử dụng logic từ videoService.downloadVideo
+    // Nhưng vì chúng ta không lưu trữ bản ghi Video nữa, nên chỉ cần kiểm tra quyền truy cập
+    
+    // Kiểm tra giới hạn tải xuống cho người dùng đã đăng ký
+    if (req.user && req.user.subscription !== 'premium') {
+      req.user.resetDailyDownloadCount();
+      const settings = await getSettings();
+      
+      if (req.user.dailyDownloadCount >= settings.maxDownloadsPerDay && req.user.bonusDownloads <= 0) {
+        return res.status(403).json({ success: false, message: 'Đã đạt giới hạn tải hàng ngày. Nâng cấp hoặc mời bạn bè.' });
+      }
+      
+      if (req.user.dailyDownloadCount >= settings.maxDownloadsPerDay && req.user.bonusDownloads > 0) {
+        req.user.useBonusDownload();
+        await req.user.save();
+      }
+    }
+    
+    // Lấy thông tin video để xác định tên file và loại file
+    const videoInfo = await ytdlp.getVideoInfo(url);
+    
+    // Kiểm tra quyền truy cập định dạng
+    const selectedFormatDetails = videoInfo.formats.find(f => f.format_id === formatId);
+    if (!selectedFormatDetails) {
+      return res.status(400).json({ success: false, message: 'Định dạng không hợp lệ.' });
+    }
+    
+    // Kiểm tra quyền truy cập định dạng dựa trên loại người dùng
+    const userType = req.user ? (req.user.subscription === 'premium' ? 'premium' : 'registered') : 'anonymous';
+    const settings = await getSettings();
+    
+    let resolution = selectedFormatDetails.height || 0;
+    if (!resolution && selectedFormatDetails.qualityKey && selectedFormatDetails.qualityKey.match(/^\d+p$/)) {
+      resolution = parseInt(selectedFormatDetails.qualityKey.replace('p', ''));
+    }
+    
+    let bitrate = selectedFormatDetails.abr || 0;
+    if (!bitrate && selectedFormatDetails.type === 'audio' && selectedFormatDetails.qualityKey && selectedFormatDetails.qualityKey.toLowerCase().includes('kbps')) {
+      const match = selectedFormatDetails.qualityKey.toLowerCase().match(/(\d+)\s*kbps/);
+      if (match) bitrate = parseInt(match[1]);
+    }
+    
+    let isFormatAllowedForUser = false;
+    const isTikTok = url.includes('tiktok.com');
+    
+    if (userType === 'premium') {
+      isFormatAllowedForUser = true;
+    } else if (userType === 'registered') {
+      if (selectedFormatDetails.type === 'video' && resolution <= (settings.freeUserMaxResolution || 1080)) {
+        isFormatAllowedForUser = true;
+      } else if (selectedFormatDetails.type === 'audio' && bitrate <= (settings.freeUserMaxAudioBitrate || 192)) {
+        isFormatAllowedForUser = true;
+      }
+    } else { // anonymous
+      const anonymousMaxVideo = isTikTok ? (settings.tiktokAnonymousMaxResolution || 1024) : (settings.anonymousMaxVideoResolution || 480);
+      const anonymousMaxAudio = settings.anonymousMaxAudioBitrate || 128;
+      
+      if (selectedFormatDetails.type === 'video') {
+        if (resolution <= anonymousMaxVideo) {
+          isFormatAllowedForUser = true;
+        }
+      } else if (selectedFormatDetails.type === 'audio') {
+        if (bitrate <= anonymousMaxAudio) {
+          isFormatAllowedForUser = true;
+        }
+      }
+    }
+    
+    if (!isFormatAllowedForUser) {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền tải định dạng này.' });
+    }
+    
+    // Xác định tên file và loại file
+    const videoTitle = title || videoInfo.title || 'video';
+    const safeTitle = videoTitle.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ');
+    
+    // Xác định loại file dựa trên định dạng đã chọn
+    let fileExtension = 'mp4'; // Mặc định
+    let mimeType = 'video/mp4';
+    
+    if (selectedFormatDetails.ext) {
+      fileExtension = selectedFormatDetails.ext;
+    } else if (selectedFormatDetails.type === 'audio') {
+      fileExtension = 'mp3';
+      mimeType = 'audio/mpeg';
+    }
+    
+    // Xác định MIME type dựa trên phần mở rộng file
+    mimeType = getMimeType(`.${fileExtension}`);
+    
+    // Thiết lập headers cho response
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeTitle)}.${fileExtension}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Gọi hàm streamVideoDirectly để lấy stream từ file tạm thời
+    const fileStream = await ytdlp.streamVideoDirectly(url, formatId, qualityKey);
+    
+    // Pipe stream từ file tạm thời vào response
+    fileStream.pipe(res);
+    
+    // Xử lý lỗi từ stream
+    fileStream.on('error', (error) => {
+      console.error(`[${new Date().toISOString()}] [STREAM_ERROR]`, error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Lỗi khi xử lý video từ nguồn.' });
+      } else {
+        // Nếu header đã gửi, chỉ có thể cố gắng kết thúc stream một cách đột ngột
+        res.end();
+      }
+    });
+    
+    // Xử lý khi stream kết thúc
+    fileStream.on('end', () => {
+      console.log(`[${new Date().toISOString()}] [STREAM_END] Stream finished for URL: ${url}`);
+      if (!res.writableEnded) { // Đảm bảo response được kết thúc
+        res.end();
+      }
+    });
+    
+    // Xử lý client ngắt kết nối
+    req.on('close', () => {
+      console.log(`[${new Date().toISOString()}] [CLIENT_DISCONNECT] Client disconnected, destroying file stream.`);
+      fileStream.destroy(); // Hủy stream khi client ngắt kết nối
+    });
+    
+    // Cập nhật thống kê tải xuống (nếu cần)
+    if (req.user) {
+      User.findByIdAndUpdate(req.user.id, {
+        $inc: { downloadCount: 1, dailyDownloadCount: 1 },
+        lastDownloadDate: new Date()
+      }).catch(err => console.error(`[${new Date().toISOString()}] Error updating user stats:`, err));
+    }
+    
+    // Log thông tin tải xuống cho mục đích thống kê
+    console.log(`[${new Date().toISOString()}] [DOWNLOAD_STATS] User: ${req.user ? req.user.id : 'anonymous'}, URL: ${url}, Format: ${formatId}, Title: ${title}`);
+    
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Error streaming video:`, error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: error.message || 'Lỗi khi xử lý video.' });
+    }
+  }
 });
 
 /**

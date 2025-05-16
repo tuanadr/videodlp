@@ -369,7 +369,7 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
       // Xây dựng format string chính xác để đảm bảo luôn có video và audio
       // Sử dụng cú pháp đơn giản hơn và đảm bảo luôn có cả video và audio
       // Cải tiến format string để ưu tiên các định dạng có sẵn cả video và audio
-      const formatString = `bv*[height<=${resolution}]+ba/b[height<=${resolution}]`;
+      const formatString = `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]`;
       
       downloadArgs = [
         '-f', formatString,
@@ -749,6 +749,273 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
       resolve(finalOutputFile);
     });
     
+  });
+};
+
+/**
+ * Stream video trực tiếp từ URL với định dạng đã chọn
+ * @param {string} url - URL của video
+ * @param {string} formatId - ID định dạng video
+ * @param {string} qualityKey - Khóa chất lượng (tùy chọn)
+ * @returns {Promise<ChildProcess>} - Promise chứa child process đang chạy yt-dlp
+ */
+exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
+  return new Promise((resolve, reject) => {
+    logDebug(`Streaming video directly from URL: ${url}`);
+    logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
+    
+    // Tạo thư mục tạm thời để lưu file
+    const tempDir = path.join(require('os').tmpdir(), 'ytdlp-stream-' + Date.now());
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    // Tạo tên file tạm thời
+    const tempFile = path.join(tempDir, `temp-${Date.now()}.mp4`);
+    console.log(`[YTDLP] Using temporary file: ${tempFile}`);
+    
+    // Xác định các tham số tải xuống dựa trên formatId
+    let downloadArgs = [];
+    
+    // Ưu tiên sử dụng qualityKey nếu có
+    const effectiveQuality = qualityKey || formatId;
+    console.log(`[YTDLP] Processing stream request for quality: ${effectiveQuality}`);
+    
+    // Kiểm tra xem formatId có phải là một trong các lựa chọn chất lượng đơn giản không
+    if (effectiveQuality.match(/^\d+p$/)) {
+      // Đây là lựa chọn độ phân giải (ví dụ: 720p, 1080p)
+      const resolution = parseInt(effectiveQuality.replace('p', ''));
+      logDebug(`Detected resolution-based quality: ${resolution}p`);
+      console.log(`[YTDLP] Using resolution-based quality: ${resolution}p`);
+      
+      // Sử dụng cách tiếp cận đơn giản hơn với format string
+      const formatString = `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]`;
+      
+      downloadArgs = [
+        '-f', formatString,
+        '--merge-output-format', 'mp4',
+        '--no-simulate', // Đảm bảo yt-dlp thực sự tải xuống video
+        '--remux-video', 'mp4', // Remux video thành MP4 nếu cần
+        '--prefer-ffmpeg', // Đảm bảo sử dụng ffmpeg để ghép video và audio
+        '-o', tempFile, // Output to temp file
+        '--no-part', // Không tạo file .part
+        '--no-playlist' // Không tải playlist
+      ];
+      
+      console.log(`[YTDLP_STREAM_COMMAND] Using format string: ${formatString}`);
+      console.log(`[YTDLP_STREAM_COMMAND] Ensuring video and audio are merged with ffmpeg`);
+    } else if (effectiveQuality.startsWith('audio_')) {
+      // Đây là lựa chọn chỉ âm thanh
+      logDebug(`Detected audio-only format: ${effectiveQuality}`);
+      console.log(`[YTDLP] Using audio-only format: ${effectiveQuality}`);
+      
+      // Xác định định dạng âm thanh
+      let audioFormat = 'mp3';
+      let audioBitrate = '128';
+      
+      const audioParts = effectiveQuality.split('_');
+      if (audioParts.length >= 2) {
+        audioFormat = audioParts[1] || 'mp3';
+      }
+      if (audioParts.length >= 3) {
+        audioBitrate = audioParts[2] || '128';
+      }
+      
+      console.log(`[YTDLP] Audio format: ${audioFormat}, bitrate: ${audioBitrate}K`);
+      
+      // Tải xuống âm thanh chất lượng tốt nhất và chuyển đổi sang định dạng mong muốn
+      downloadArgs = [
+        '-f', 'bestaudio',
+        '--extract-audio',
+        '--audio-format', audioFormat,
+        '--audio-quality', `${audioBitrate}K`,
+        '-o', '-', // Output to stdout
+        '--no-playlist' // Không tải playlist
+      ];
+    } else if (effectiveQuality === 'best') {
+      // Lựa chọn "Chất lượng tốt nhất có sẵn"
+      logDebug('Using best available quality');
+      console.log(`[YTDLP] Using best available quality`);
+      
+      downloadArgs = [
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '--merge-output-format', 'mp4',
+        '-o', '-', // Output to stdout
+        '--no-playlist' // Không tải playlist
+      ];
+    } else if (effectiveQuality.includes('+') || effectiveQuality.includes('/')) {
+      // Đây là format ID phức tạp (có thể là bestvideo+bestaudio hoặc tương tự)
+      logDebug(`Using complex format ID: ${effectiveQuality}`);
+      console.log(`[YTDLP] Using complex format ID: ${effectiveQuality}`);
+      
+      downloadArgs = [
+        '-f', effectiveQuality,
+        '--merge-output-format', 'mp4',
+        '-o', '-', // Output to stdout
+        '--no-playlist' // Không tải playlist
+      ];
+    } else {
+      // Sử dụng format ID cụ thể (tương thích với code cũ)
+      logDebug(`Using specific format ID: ${effectiveQuality}`);
+      console.log(`[YTDLP] Using specific format ID: ${effectiveQuality}`);
+      
+      downloadArgs = [
+        '-f', effectiveQuality,
+        '-o', '-', // Output to stdout
+        '--no-playlist' // Không tải playlist
+      ];
+    }
+    
+    // Tìm đường dẫn đến ffmpeg
+    let ffmpegPath = '';
+    try {
+      // Thử tìm ffmpeg trong hệ thống
+      const whichCommand = process.platform === 'win32' ? 'where' : 'which';
+      const ffmpegCheck = require('child_process').execSync(`${whichCommand} ffmpeg`, { encoding: 'utf8' }).trim();
+      
+      if (ffmpegCheck) {
+        ffmpegPath = ffmpegCheck;
+        console.log(`[YTDLP_FFMPEG] Found ffmpeg at: ${ffmpegPath}`);
+        downloadArgs.push('--ffmpeg-location', ffmpegPath);
+      }
+    } catch (error) {
+      console.log(`[YTDLP_WARNING] Could not find ffmpeg in PATH: ${error.message}`);
+      
+      // Thử một số đường dẫn phổ biến
+      const commonPaths = [
+        'C:\\ffmpeg\\bin\\ffmpeg.exe',
+        'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
+        'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
+        '/usr/bin/ffmpeg',
+        '/usr/local/bin/ffmpeg'
+      ];
+      
+      for (const path of commonPaths) {
+        if (fs.existsSync(path)) {
+          ffmpegPath = path;
+          console.log(`[YTDLP_FFMPEG] Found ffmpeg at common path: ${ffmpegPath}`);
+          downloadArgs.push('--ffmpeg-location', ffmpegPath);
+          break;
+        }
+      }
+    }
+    
+    // Nếu không tìm thấy ffmpeg, ghi log cảnh báo
+    if (!ffmpegPath) {
+      console.log(`[YTDLP_WARNING] ffmpeg not found, video merging may fail`);
+    }
+
+    // Thêm các tham số chung
+    const args = [
+      url,
+      ...downloadArgs
+    ];
+    
+    const commandString = `python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`;
+    logDebug(`Command: ${commandString}`);
+    console.log(`[YTDLP_STREAM_COMMAND] Executing full command: ${commandString}`);
+    
+    // Sử dụng spawn để tải xuống file
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
+    
+    let errorOutput = '';
+    
+    ytDlp.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(`[YTDLP_OUTPUT] ${output.trim()}`);
+    });
+    
+    ytDlp.stderr.on('data', (data) => {
+      const error = data.toString();
+      errorOutput += error;
+      logDebug(`stderr: ${error}`);
+      console.log(`[YTDLP_ERROR] ${error.trim()}`);
+    });
+    
+    ytDlp.on('error', (error) => {
+      logDebug(`yt-dlp process error: ${error.message}`);
+      console.error(`[YTDLP_PROCESS_ERROR] ${error.message}`);
+      
+      // Dọn dẹp file tạm thời nếu có lỗi
+      try {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+        }
+        fs.rmdirSync(tempDir, { recursive: true });
+      } catch (cleanupError) {
+        console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
+      }
+      
+      reject(error);
+    });
+    
+    ytDlp.on('close', (code) => {
+      console.log(`[YTDLP_PROCESS] yt-dlp process exited with code ${code}`);
+      
+      if (code !== 0) {
+        console.log(`[YTDLP_ERROR] Process failed with code ${code}: ${errorOutput}`);
+        
+        // Dọn dẹp file tạm thời nếu có lỗi
+        try {
+          if (fs.existsSync(tempFile)) {
+            fs.unlinkSync(tempFile);
+          }
+          fs.rmdirSync(tempDir, { recursive: true });
+        } catch (cleanupError) {
+          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
+        }
+        
+        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
+      }
+      
+      // Kiểm tra file tạm thời có tồn tại không
+      if (!fs.existsSync(tempFile)) {
+        console.log(`[YTDLP_ERROR] Temporary file does not exist: ${tempFile}`);
+        
+        // Dọn dẹp thư mục tạm thời
+        try {
+          fs.rmdirSync(tempDir, { recursive: true });
+        } catch (cleanupError) {
+          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
+        }
+        
+        return reject(new Error('Không thể tạo file tạm thời'));
+      }
+      
+      // Tạo một stream đọc từ file tạm thời
+      const fileStream = fs.createReadStream(tempFile);
+      
+      // Xử lý khi stream kết thúc
+      fileStream.on('end', () => {
+        console.log(`[YTDLP_STREAM] File stream ended, cleaning up temporary files`);
+        
+        // Dọn dẹp file tạm thời sau khi stream kết thúc
+        try {
+          fs.unlinkSync(tempFile);
+          fs.rmdirSync(tempDir, { recursive: true });
+        } catch (cleanupError) {
+          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
+        }
+      });
+      
+      // Xử lý lỗi stream
+      fileStream.on('error', (streamError) => {
+        console.error(`[YTDLP_STREAM_ERROR] ${streamError.message}`);
+        
+        // Dọn dẹp file tạm thời nếu có lỗi
+        try {
+          fs.unlinkSync(tempFile);
+          fs.rmdirSync(tempDir, { recursive: true });
+        } catch (cleanupError) {
+          console.error(`[YTDLP_CLEANUP_ERROR] ${cleanupError.message}`);
+        }
+        
+        reject(streamError);
+      });
+      
+      // Trả về stream để controller có thể pipe đến response
+      resolve(fileStream);
+    });
   });
 };
 

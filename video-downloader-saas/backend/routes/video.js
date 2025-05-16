@@ -122,6 +122,15 @@ router.post('/download',
   downloadVideo
 );
 
+// Route mới cho streaming trực tiếp
+router.post('/stream',
+  sanitizeData,
+  videoUrlValidation,
+  optionalAuth,
+  downloadLimiter,
+  streamVideo
+);
+
 // Routes yêu cầu xác thực
 router.get('/', protect, apiLimiter, getUserVideos);
 
