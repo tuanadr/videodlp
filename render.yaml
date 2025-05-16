@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: videodlp-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_EXPIRE
+        value: 24h
+  
+  - type: static
+    name: videodlp-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    publishDir: build
