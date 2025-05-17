@@ -101,25 +101,17 @@ app.use('/downloads', express.static(path.join(__dirname, 'downloads'), {
   etag: true
 }));
 
-// CSRF protection (chỉ áp dụng cho các routes cần bảo vệ, không áp dụng cho routes xác thực)
-if (process.env.NODE_ENV === 'production') {
-  // Loại trừ các routes xác thực khỏi CSRF protection
-  const csrfProtection = (req, res, next) => {
-    // Bỏ qua CSRF cho routes đăng nhập/đăng ký
-    if (req.path.startsWith('/api/auth/login') ||
-        req.path.startsWith('/api/auth/register') ||
-        req.path.startsWith('/api/auth/refresh-token')) {
-      return next();
-    }
-    
-    // Áp dụng CSRF cho các routes khác
-    return configureCsrf()(req, res, next);
-  };
-  
-  app.use('/api', csrfProtection);
+// CSRF protection - Tạm thời tắt trong môi trường production để khắc phục lỗi đăng nhập/đăng ký
+// TODO: Bật lại CSRF protection sau khi đã khắc phục lỗi và cấu hình frontend để gửi CSRF token
+if (process.env.NODE_ENV === 'development') {
+  // Chỉ áp dụng CSRF protection trong môi trường development
+  app.use('/api', configureCsrf());
   app.use('/api', handleCsrfError);
   app.use('/api', setCsrfToken);
 }
+
+// Log để debug
+console.log(`[CSRF] Protection ${process.env.NODE_ENV === 'development' ? 'enabled' : 'disabled'} for environment: ${process.env.NODE_ENV}`);
 
 // Middleware để log các yêu cầu API
 app.use('/api', (req, res, next) => {
