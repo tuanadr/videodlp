@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { Link } from 'react-router-dom';
+import UserLimitsInfo from '../components/ui/UserLimitsInfo';
 
 const VideoDownloadPage = () => {
   const { user } = useAuth();
@@ -318,36 +319,9 @@ const VideoDownloadPage = () => {
             </p>
           </header>
           
-          {/* Thông tin gói đăng ký */}
+          {/* Thông tin gói đăng ký và giới hạn người dùng */}
           <section className="border-t border-gray-200 px-4 py-5 sm:px-6" aria-label="Thông tin gói đăng ký">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <div className="mb-3 sm:mb-0">
-                <span className="text-sm font-medium text-gray-700">Gói hiện tại:</span>
-                <span className={`ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  user?.subscription === 'premium' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {user?.subscription === 'premium' ? 'Premium' : 'Miễn phí'}
-                </span>
-              </div>
-              
-              {user?.subscription !== 'premium' && (
-                <a
-                  href="/dashboard/subscription"
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px] min-w-[140px]"
-                >
-                  <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                  </svg>
-                  Nâng cấp lên Premium
-                </a>
-              )}
-            </div>
-            
-            {user?.subscription !== 'premium' && (
-              <p className="mt-3 text-sm text-gray-700">
-                Bạn đang sử dụng gói Miễn phí. Giới hạn tải xuống: {settings.maxDownloadsPerDay} video/ngày, chỉ chất lượng cơ bản (≤ 720p).
-              </p>
-            )}
+            <UserLimitsInfo />
           </section>
           
           {/* Form nhập URL */}

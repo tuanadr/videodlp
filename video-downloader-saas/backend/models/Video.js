@@ -54,19 +54,7 @@ const VideoSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  },
-  expiresAt: {
-    type: Date,
-    default: function() {
-      // Video sẽ hết hạn sau 24 giờ (đối với người dùng miễn phí)
-      const date = new Date();
-      date.setDate(date.getDate() + 1);
-      return date;
-    }
   }
 });
-
-// Tạo index để tự động xóa video hết hạn
-VideoSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model('Video', VideoSchema);

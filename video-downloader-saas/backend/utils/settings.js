@@ -14,13 +14,37 @@ exports.getSettings = async () => {
     if (!fs.existsSync(settingsPath)) {
       // Tạo file cài đặt mặc định nếu chưa có
       const defaultSettings = {
-        maxDownloadsPerDay: 3,
-        premiumPrice: 99000,
-        premiumStorageDays: 7,
-        freeStorageDays: 1,
+        // Giới hạn lượt tải
+        anonymousDownloadsPerDay: 10,
+        freeDownloadsPerDay: 20,
+        premiumDownloadsPerDay: -1, // -1 = không giới hạn
+        
+        // Giới hạn độ phân giải
+        anonymousMaxVideoResolution: 1080, // Độ phân giải tối thiểu 1080p cho anonymous
+        freeMaxVideoResolution: 720,       // Độ phân giải tối đa 720p cho free
+        premiumMaxVideoResolution: 2160,   // Độ phân giải tối đa 4K (2160p) cho premium
+        
+        // Giới hạn độ phân giải cho TikTok (có thể cao hơn do đặc thù nền tảng)
+        tiktokAnonymousMaxResolution: 1080,
+        tiktokFreeMaxResolution: 1080,
+        tiktokPremiumMaxResolution: 2160,
+        
+        // Giới hạn bitrate âm thanh
+        anonymousMaxAudioBitrate: 128,
+        freeMaxAudioBitrate: 192,
+        premiumMaxAudioBitrate: 320,
+        
+        // Cài đặt khác
+        premiumPrice: 199000,
         maintenanceMode: false,
         allowedFormats: ['mp4', 'webm', 'mp3', 'm4a'],
         maxFileSize: 1024 * 1024 * 1024, // 1GB
+        
+        // Cài đặt ưu tiên hàng đợi
+        enableQueuePriority: true,
+        systemOverloadThreshold: 80, // % CPU hoặc RAM để coi là quá tải
+        severeOverloadThreshold: 90, // % CPU hoặc RAM để coi là quá tải nghiêm trọng
+        
         updatedAt: new Date()
       };
       
@@ -45,13 +69,37 @@ exports.getSettings = async () => {
     
     // Trả về cài đặt mặc định nếu có lỗi
     return {
-      maxDownloadsPerDay: 3,
-      premiumPrice: 99000,
-      premiumStorageDays: 7,
-      freeStorageDays: 1,
+      // Giới hạn lượt tải
+      anonymousDownloadsPerDay: 10,
+      freeDownloadsPerDay: 20,
+      premiumDownloadsPerDay: -1, // -1 = không giới hạn
+      
+      // Giới hạn độ phân giải
+      anonymousMaxVideoResolution: 1080, // Độ phân giải tối thiểu 1080p cho anonymous
+      freeMaxVideoResolution: 720,       // Độ phân giải tối đa 720p cho free
+      premiumMaxVideoResolution: 2160,   // Độ phân giải tối đa 4K (2160p) cho premium
+      
+      // Giới hạn độ phân giải cho TikTok (có thể cao hơn do đặc thù nền tảng)
+      tiktokAnonymousMaxResolution: 1080,
+      tiktokFreeMaxResolution: 1080,
+      tiktokPremiumMaxResolution: 2160,
+      
+      // Giới hạn bitrate âm thanh
+      anonymousMaxAudioBitrate: 128,
+      freeMaxAudioBitrate: 192,
+      premiumMaxAudioBitrate: 320,
+      
+      // Cài đặt khác
+      premiumPrice: 199000,
       maintenanceMode: false,
       allowedFormats: ['mp4', 'webm', 'mp3', 'm4a'],
       maxFileSize: 1024 * 1024 * 1024, // 1GB
+      
+      // Cài đặt ưu tiên hàng đợi
+      enableQueuePriority: true,
+      systemOverloadThreshold: 80, // % CPU hoặc RAM để coi là quá tải
+      severeOverloadThreshold: 90, // % CPU hoặc RAM để coi là quá tải nghiêm trọng
+      
       updatedAt: new Date()
     };
   }

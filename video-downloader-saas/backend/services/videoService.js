@@ -13,11 +13,7 @@ const { AppError } = require('../utils/errorHandler');
  */
 class VideoService {
   constructor() {
-    this.DOWNLOAD_DIR = path.join(__dirname, '../downloads');
-    this.SUBTITLE_DIR = path.join(this.DOWNLOAD_DIR, 'subtitles');
-    
-    if (!fs.existsSync(this.DOWNLOAD_DIR)) fs.mkdirSync(this.DOWNLOAD_DIR, { recursive: true });
-    if (!fs.existsSync(this.SUBTITLE_DIR)) fs.mkdirSync(this.SUBTITLE_DIR, { recursive: true });
+    // Không cần khởi tạo thư mục lưu trữ vì đã chuyển sang streaming
   }
 
   /**
@@ -34,13 +30,15 @@ class VideoService {
     const videoInfo = await ytdlp.getVideoInfo(url);
     const settings = await getSettings();
     
-    const userType = user ? (user.subscription === 'premium' ? 'premium' : 'registered') : 'anonymous';
+    const userType = user ? (user.subscription === 'premium' ? 'premium' : 'free') : 'anonymous';
     
-    const anonymousMaxVideoResolution = settings.anonymousMaxVideoResolution || 480;
-    const tiktokAnonymousMaxResolution = settings.tiktokAnonymousMaxResolution || 1024;
+    // Sử dụng các cài đặt mới
+    const anonymousMaxVideoResolution = settings.anonymousMaxVideoResolution || 1080;
+    const tiktokAnonymousMaxResolution = settings.tiktokAnonymousMaxResolution || 1080;
     const anonymousMaxAudioBitrate = settings.anonymousMaxAudioBitrate || 128;
-    const freeUserMaxResolution = settings.freeUserMaxResolution || 1080;
-    const freeUserMaxAudioBitrate = settings.freeUserMaxAudioBitrate || 192;
+    const freeMaxVideoResolution = settings.freeMaxVideoResolution || 720;
+    const freeMaxAudioBitrate = settings.freeMaxAudioBitrate || 192;
+    const premiumMaxVideoResolution = settings.premiumMaxVideoResolution || 2160; // 4K
 
     const isTikTok = url.includes('tiktok.com');
 
@@ -60,15 +58,24 @@ class VideoService {
       }
 
       if (userType === 'premium') {
-        isAllowed = true;
-        requirement = null;
-      } else if (userType === 'registered') {
-        if (format.type === 'video' && resolution > freeUserMaxResolution) {
+        // Người dùng premium có thể truy cập tất cả các định dạng trong giới hạn
+        if (format.type === 'video' && resolution > premiumMaxVideoResolution) {
+          isAllowed = false;
+          requirement = null; // Không có yêu cầu nâng cấp vì đã là premium
+        } else {
+          isAllowed = true;
+          requirement = null;
+        }
+      } else if (userType === 'free') {
+        if (format.type === 'video' && resolution > freeMaxVideoResolution) {
           isAllowed = false;
           requirement = 'premium';
-        } else if (format.type === 'audio' && bitrate > freeUserMaxAudioBitrate) {
+        } else if (format.type === 'audio' && bitrate > freeMaxAudioBitrate) {
           isAllowed = false;
           requirement = 'premium';
+        } else {
+          isAllowed = true;
+          requirement = null;
         }
       } else { // anonymous
         if (isTikTok && format.type === 'video') {
@@ -162,18 +169,44 @@ class VideoService {
       throw new AppError('Hệ thống đang bảo trì.', 503);
     }
 
-    const userType = user ? (user.subscription === 'premium' ? 'premium' : 'registered') : 'anonymous';
+    const userType = user ? (user.subscription === 'premium' ? 'premium' : 'free') : 'anonymous';
     const userId = user ? user.id : null;
 
-    // Kiểm tra giới hạn tải xuống cho người dùng đã đăng ký
-    if (userType === 'registered') {
-      user.resetDailyDownloadCount();
-      if (user.dailyDownloadCount >= settings.maxDownloadsPerDay && user.bonusDownloads <= 0) {
-        throw new AppError('Đã đạt giới hạn tải hàng ngày. Nâng cấp hoặc mời bạn bè.', 403);
+    // Kiểm tra giới hạn tải xuống cho từng loại người dùng
+    if (userType === 'anonymous') {
+      // Kiểm tra giới hạn cho người dùng anonymous
+      const anonymousDownloadsPerDay = settings.anonymousDownloadsPerDay || 10;
+      
+      // Đếm số lượt tải xuống của IP này trong ngày
+      // Trong môi trường thực tế, bạn cần lưu trữ và kiểm tra số lượt tải xuống theo IP
+      // Đây là mô phỏng đơn giản
+      const anonymousDownloadCount = 0; // Giả sử đây là số lượt tải xuống của IP này
+      
+      if (anonymousDownloadCount >= anonymousDownloadsPerDay) {
+        throw new AppError('Đã đạt giới hạn tải hàng ngày. Vui lòng đăng nhập để có thêm lượt tải.', 403);
       }
-      if (user.dailyDownloadCount >= settings.maxDownloadsPerDay && user.bonusDownloads > 0) {
+    } else if (userType === 'free') {
+      // Kiểm tra giới hạn cho người dùng free
+      const freeDownloadsPerDay = settings.freeDownloadsPerDay || 20;
+      
+      user.resetDailyDownloadCount();
+      if (user.dailyDownloadCount >= freeDownloadsPerDay && user.bonusDownloads <= 0) {
+        throw new AppError('Đã đạt giới hạn tải hàng ngày. Nâng cấp lên Premium hoặc mời bạn bè để có thêm lượt tải.', 403);
+      }
+      if (user.dailyDownloadCount >= freeDownloadsPerDay && user.bonusDownloads > 0) {
         user.useBonusDownload();
         await user.save();
+      }
+    } else if (userType === 'premium') {
+      // Người dùng premium không có giới hạn lượt tải
+      // Hoặc có giới hạn rất cao
+      const premiumDownloadsPerDay = settings.premiumDownloadsPerDay || -1; // -1 = không giới hạn
+      
+      if (premiumDownloadsPerDay > 0) {
+        user.resetDailyDownloadCount();
+        if (user.dailyDownloadCount >= premiumDownloadsPerDay) {
+          throw new AppError('Đã đạt giới hạn tải hàng ngày cho gói Premium.', 403);
+        }
       }
     }
     
@@ -199,15 +232,20 @@ class VideoService {
     const isTikTok = url.includes('tiktok.com');
 
     if (userType === 'premium') {
-      isFormatAllowedForUser = true;
-    } else if (userType === 'registered') {
-      if (selectedFormatDetails.type === 'video' && resolution <= (settings.freeUserMaxResolution || 1080)) {
+      // Người dùng premium có thể truy cập tất cả các định dạng trong giới hạn
+      if (selectedFormatDetails.type === 'video' && resolution <= (settings.premiumMaxVideoResolution || 2160)) {
         isFormatAllowedForUser = true;
-      } else if (selectedFormatDetails.type === 'audio' && bitrate <= (settings.freeUserMaxAudioBitrate || 192)) {
+      } else if (selectedFormatDetails.type === 'audio' && bitrate <= (settings.premiumMaxAudioBitrate || 320)) {
+        isFormatAllowedForUser = true;
+      }
+    } else if (userType === 'free') {
+      if (selectedFormatDetails.type === 'video' && resolution <= (settings.freeMaxVideoResolution || 720)) {
+        isFormatAllowedForUser = true;
+      } else if (selectedFormatDetails.type === 'audio' && bitrate <= (settings.freeMaxAudioBitrate || 192)) {
         isFormatAllowedForUser = true;
       }
     } else { // anonymous
-      const anonymousMaxVideo = isTikTok ? (settings.tiktokAnonymousMaxResolution || 1024) : (settings.anonymousMaxVideoResolution || 480);
+      const anonymousMaxVideo = isTikTok ? (settings.tiktokAnonymousMaxResolution || 1080) : (settings.anonymousMaxVideoResolution || 1080);
       const anonymousMaxAudio = settings.anonymousMaxAudioBitrate || 128;
       
       if (selectedFormatDetails.type === 'video') {
@@ -238,14 +276,7 @@ class VideoService {
       isTemporary: userType === 'anonymous'
     });
     
-    // Tính thời gian hết hạn
-    const expiresAtTTL = userType === 'premium' ? (settings.premiumStorageDays || 30) : (settings.freeStorageDays || 7);
-    const finalExpiresAt = userType === 'anonymous'
-      ? new Date(Date.now() + (settings.anonymousFileTTLMinutes || 5) * 60 * 1000)
-      : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
-    
-    // Cập nhật thời gian hết hạn
-    await Video.findByIdAndUpdate(video._id, { expiresAt: finalExpiresAt });
+    // Không cần tính thời gian hết hạn vì đã chuyển sang streaming
 
     // Xóa cache thông tin video
     clearCache(`video_info:${url}`);
@@ -260,20 +291,7 @@ class VideoService {
       settings
     });
 
-    // Nếu là anonymous, thiết lập xóa file sau khi hết hạn
-    if (userType === 'anonymous') {
-      const anonymousFileTTL = (settings.anonymousFileTTLMinutes || 5) * 60 * 1000;
-      setTimeout(async () => {
-        try {
-          const videoToDelete = await Video.findById(video._id);
-          if (videoToDelete && videoToDelete.downloadPath && fs.existsSync(videoToDelete.downloadPath)) {
-            fs.unlinkSync(videoToDelete.downloadPath);
-          }
-        } catch (unlinkError) {
-          console.error(`Error deleting temporary anonymous file: ${unlinkError.message}`);
-        }
-      }, anonymousFileTTL);
-    }
+    // Không cần thiết lập xóa file vì đã chuyển sang streaming
 
     return {
       videoId: video._id,
@@ -352,9 +370,7 @@ class VideoService {
       throw new AppError('Không có quyền xóa video này', 403);
     }
 
-    if (video.downloadPath && fs.existsSync(video.downloadPath)) {
-      fs.unlinkSync(video.downloadPath);
-    }
+    // Không cần xóa file vì đã chuyển sang streaming
     await video.deleteOne();
   }
 

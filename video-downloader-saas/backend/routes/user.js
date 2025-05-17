@@ -111,4 +111,45 @@ router.get('/', authorize('admin'), async (req, res) => {
   }
 });
 
+/**
+ * @desc    Lấy thống kê người dùng (số lượt tải xuống, lượt tải thưởng)
+ * @route   GET /api/users/stats
+ * @access  Private
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    // Kiểm tra và reset lượt tải xuống hàng ngày nếu cần
+    const today = new Date();
+    const lastDownloadDate = user.lastDownloadDate ? new Date(user.lastDownloadDate) : null;
+    
+    // Nếu ngày cuối cùng tải xuống không phải hôm nay, reset đếm lượt tải hàng ngày
+    if (lastDownloadDate &&
+        (lastDownloadDate.getDate() !== today.getDate() ||
+         lastDownloadDate.getMonth() !== today.getMonth() ||
+         lastDownloadDate.getFullYear() !== today.getFullYear())) {
+      user.resetDailyDownloadCount();
+      await user.save(); // Lưu thay đổi vào database
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        downloadCount: user.downloadCount,
+        dailyDownloadCount: user.dailyDownloadCount,
+        bonusDownloads: user.bonusDownloads || 0,
+        lastDownloadDate: user.lastDownloadDate,
+        referralStats: user.referralStats || { count: 0, totalBonus: 0 }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Không thể lấy thống kê người dùng',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
