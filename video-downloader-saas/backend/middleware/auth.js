@@ -167,13 +167,35 @@ exports.checkSubscription = (req, res, next) => {
   next();
 };
 
+// Cấu hình chung cho rate limiter
+const rateLimiterConfig = {
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Cấu hình an toàn cho proxy
+  trustProxy: false, // Không tin tưởng proxy một cách mặc định
+  // Sử dụng X-Forwarded-For header từ Render.com một cách an toàn
+  keyGenerator: (req) => {
+    // Lấy IP từ X-Forwarded-For header nếu có, nếu không thì dùng IP trực tiếp
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (xForwardedFor) {
+      // Chỉ lấy IP đầu tiên trong chuỗi X-Forwarded-For
+      const ip = xForwardedFor.split(',')[0].trim();
+      console.log(`[RATE_LIMIT] Using IP from X-Forwarded-For: ${ip}`);
+      return ip;
+    }
+    
+    // Fallback to direct IP
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log(`[RATE_LIMIT] Using direct IP: ${ip}`);
+    return ip;
+  }
+};
+
 // Rate limiting cho API chung
 exports.apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 phút
   max: 100, // Giới hạn mỗi IP 100 yêu cầu mỗi 15 phút
-  standardHeaders: true,
-  legacyHeaders: false,
-  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  ...rateLimiterConfig,
   handler: (req, res, next, options) => {
     console.log('[RATE_LIMIT] API limit reached for IP:', req.ip);
     return res.status(options.statusCode).json({
@@ -187,9 +209,7 @@ exports.apiLimiter = rateLimit({
 exports.authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 giờ
   max: 10, // Giới hạn mỗi IP 10 yêu cầu đăng nhập/đăng ký mỗi giờ
-  standardHeaders: true,
-  legacyHeaders: false,
-  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  ...rateLimiterConfig,
   handler: (req, res, next, options) => {
     console.log('[RATE_LIMIT] Auth limit reached for IP:', req.ip);
     return res.status(options.statusCode).json({
@@ -203,9 +223,7 @@ exports.authLimiter = rateLimit({
 const downloadRateLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 phút
   max: 10, // Giới hạn mỗi IP 10 yêu cầu tải mỗi 5 phút
-  standardHeaders: true,
-  legacyHeaders: false,
-  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  ...rateLimiterConfig,
   handler: (req, res, next, options) => {
     console.log('[RATE_LIMIT] Download limit reached for IP:', req.ip);
     return res.status(options.statusCode).json({
@@ -219,9 +237,7 @@ const downloadRateLimiter = rateLimit({
 exports.videoInfoLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 phút
   max: 30, // Giới hạn mỗi IP 30 yêu cầu mỗi 10 phút
-  standardHeaders: true,
-  legacyHeaders: false,
-  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  ...rateLimiterConfig,
   handler: (req, res, next, options) => {
     console.log('[RATE_LIMIT] Video info limit reached for IP:', req.ip);
     return res.status(options.statusCode).json({
@@ -257,6 +273,7 @@ exports.optionalAuth = async (req, res, next) => {
 
   // Nếu không có token, vẫn cho phép truy cập
   if (!token) {
+    console.log('[optionalAuth] No token provided, continuing as anonymous');
     return next();
   }
 
@@ -281,22 +298,18 @@ exports.optionalAuth = async (req, res, next) => {
   } catch (err) {
     // Xử lý token hết hạn
     if (err.name === 'TokenExpiredError') {
-      console.log('[optionalAuth] Token expired');
+      console.log('[optionalAuth] Token expired, continuing as anonymous');
       
       // Thêm thông tin về token hết hạn vào request để frontend có thể xử lý
       req.tokenExpired = true;
       
-      // Vẫn cho phép truy cập nhưng với trạng thái token hết hạn
-      return res.status(401).json({
-        success: false,
-        message: 'Token đã hết hạn, vui lòng đăng nhập lại',
-        isExpired: true
-      });
+      // QUAN TRỌNG: Vẫn cho phép truy cập như người dùng ẩn danh
+      return next();
     }
     
-    console.log(`[optionalAuth] Token invalid: ${err.message}`);
+    console.log(`[optionalAuth] Token invalid: ${err.message}, continuing as anonymous`);
     // Nếu token không hợp lệ, vẫn cho phép truy cập nhưng không có thông tin người dùng
-    next();
+    return next();
   }
 };
 

@@ -39,7 +39,38 @@ app.use(secureHeaders); // Thiết lập các headers bảo mật bổ sung
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: function(origin, callback) {
+    // Danh sách các origin được phép
+    const allowedOrigins = ['http://localhost:3000'];
+    
+    // Thêm FRONTEND_URL vào danh sách nếu có
+    if (process.env.FRONTEND_URL) {
+      // Thêm cả phiên bản có và không có dấu / ở cuối
+      const frontendUrl = process.env.FRONTEND_URL;
+      allowedOrigins.push(frontendUrl);
+      
+      // Nếu có dấu / ở cuối, thêm phiên bản không có dấu /
+      if (frontendUrl.endsWith('/')) {
+        allowedOrigins.push(frontendUrl.slice(0, -1));
+      }
+      // Nếu không có dấu / ở cuối, thêm phiên bản có dấu /
+      else {
+        allowedOrigins.push(frontendUrl + '/');
+      }
+    }
+    
+    // Log để debug
+    console.log(`[CORS] Request from origin: ${origin}`);
+    console.log(`[CORS] Allowed origins: ${JSON.stringify(allowedOrigins)}`);
+    
+    // Kiểm tra origin có trong danh sách không
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`[CORS] Origin ${origin} not allowed`);
+      callback(new Error('CORS not allowed'));
+    }
+  },
   credentials: true, // Cho phép gửi cookie qua CORS
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
