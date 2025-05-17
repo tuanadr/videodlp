@@ -272,31 +272,15 @@ const initializeRedisQueues = async () => {
     
     // Tạo các hàng đợi với mức ưu tiên khác nhau
     premiumQueue = new Queue('premium-queue', connectionUrl, {
-      priority: 1, // Ưu tiên cao nhất
-      // Thêm cấu hình kết nối với timeout và số lần thử lại
-      redis: {
-        maxRetriesPerRequest: 3,
-        connectTimeout: 5000,
-        enableReadyCheck: true
-      }
+      priority: 1 // Ưu tiên cao nhất
     });
     
     freeQueue = new Queue('free-queue', connectionUrl, {
-      priority: 2, // Ưu tiên trung bình
-      redis: {
-        maxRetriesPerRequest: 3,
-        connectTimeout: 5000,
-        enableReadyCheck: true
-      }
+      priority: 2 // Ưu tiên trung bình
     });
     
     anonymousQueue = new Queue('anonymous-queue', connectionUrl, {
-      priority: 3, // Ưu tiên thấp nhất
-      redis: {
-        maxRetriesPerRequest: 3,
-        connectTimeout: 5000,
-        enableReadyCheck: true
-      }
+      priority: 3 // Ưu tiên thấp nhất
     });
     
     // Cấu hình các hàng đợi
@@ -326,24 +310,12 @@ const initializeRedisQueues = async () => {
     configureQueue(freeQueue, 'free-queue', 3);       // Free có số worker trung bình
     configureQueue(anonymousQueue, 'anonymous-queue', 2); // Anonymous có ít worker nhất
     
-    // Kiểm tra kết nối Redis với timeout
-    const pingPromise = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Redis ping timeout after 5 seconds'));
-      }, 5000);
-      
-      premiumQueue.client.ping()
-        .then(() => {
-          clearTimeout(timeout);
-          resolve(true);
-        })
-        .catch((err) => {
-          clearTimeout(timeout);
-          reject(err);
-        });
-    });
-    
-    await pingPromise;
+    // Kiểm tra kết nối Redis
+    try {
+      await premiumQueue.client.ping();
+    } catch (error) {
+      throw new Error(`Redis ping failed: ${error.message}`);
+    }
     console.log('[QUEUE] Successfully connected to Redis');
     redisAvailable = true;
     
@@ -411,24 +383,8 @@ const addVideoJob = async (jobData) => {
       queueName = 'anonymous-queue';
     }
     
-    // Thêm job vào hàng đợi tương ứng với timeout
-    const addJobPromise = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Add job timeout after 5 seconds'));
-      }, 5000);
-      
-      targetQueue.add('downloadVideo', jobData)
-        .then(job => {
-          clearTimeout(timeout);
-          resolve(job);
-        })
-        .catch(err => {
-          clearTimeout(timeout);
-          reject(err);
-        });
-    });
-    
-    const job = await addJobPromise;
+    // Thêm job vào hàng đợi tương ứng
+    const job = await targetQueue.add('downloadVideo', jobData);
     console.log(`[QUEUE] Added job ${job.id} to ${queueName}`);
     
     // Thêm thông tin về thời gian chờ ước tính
