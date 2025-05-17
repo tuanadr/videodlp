@@ -12,9 +12,24 @@ services:
         value: 5000
       - key: JWT_EXPIRE
         value: 24h
+      # Các biến môi trường khác sẽ được cấu hình trong dashboard Render.com
+      # - JWT_SECRET
+      # - REFRESH_TOKEN_SECRET
+      # - REFRESH_TOKEN_EXPIRE
+      # - MONGO_URI
+      # - FRONTEND_URL
+      # - STRIPE_SECRET_KEY (nếu sử dụng)
+      # - STRIPE_WEBHOOK_SECRET (nếu sử dụng)
+      # - REDIS_URL (tùy chọn)
+    healthCheckPath: /
+    autoDeploy: true
   
   - type: static
     name: videodlp-frontend
     rootDir: frontend
     buildCommand: npm install && npm run build
     publishDir: build
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=86400

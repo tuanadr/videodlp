@@ -259,68 +259,132 @@ const processVideoJob = async (job) => {
   }
 };
 
-// Thử kết nối đến Redis và tạo các hàng đợi
-try {
-  const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-  
-  // Tạo các hàng đợi với mức ưu tiên khác nhau
-  premiumQueue = new Queue('premium-queue', redisUrl, {
-    priority: 1 // Ưu tiên cao nhất
-  });
-  
-  freeQueue = new Queue('free-queue', redisUrl, {
-    priority: 2 // Ưu tiên trung bình
-  });
-  
-  anonymousQueue = new Queue('anonymous-queue', redisUrl, {
-    priority: 3 // Ưu tiên thấp nhất
-  });
-  
-  // Cấu hình các hàng đợi
-  const configureQueue = (queue, name, concurrency) => {
-    queue.on('error', (error) => {
-      console.error(`[QUEUE] Error in ${name}: ${error.message}`);
-      redisAvailable = false;
+// Hàm khởi tạo kết nối Redis và tạo các hàng đợi
+const initializeRedisQueues = async () => {
+  try {
+    // Kiểm tra biến môi trường REDIS_URL
+    const redisUrl = process.env.REDIS_URL;
+    
+    // Nếu không có REDIS_URL, thử kết nối đến Redis cục bộ
+    const connectionUrl = redisUrl || 'redis://127.0.0.1:6379';
+    
+    console.log(`[QUEUE] Attempting to connect to Redis at ${redisUrl ? 'REDIS_URL' : 'localhost:6379'}`);
+    
+    // Tạo các hàng đợi với mức ưu tiên khác nhau
+    premiumQueue = new Queue('premium-queue', connectionUrl, {
+      priority: 1, // Ưu tiên cao nhất
+      // Thêm cấu hình kết nối với timeout và số lần thử lại
+      redis: {
+        maxRetriesPerRequest: 3,
+        connectTimeout: 5000,
+        enableReadyCheck: true
+      }
     });
     
-    queue.on('failed', (job, error) => {
-      console.error(`[QUEUE] Job ${job.id} in ${name} failed: ${error.message}`);
+    freeQueue = new Queue('free-queue', connectionUrl, {
+      priority: 2, // Ưu tiên trung bình
+      redis: {
+        maxRetriesPerRequest: 3,
+        connectTimeout: 5000,
+        enableReadyCheck: true
+      }
     });
     
-    queue.on('completed', (job, result) => {
-      console.log(`[QUEUE] Job ${job.id} in ${name} completed with result:`, result);
+    anonymousQueue = new Queue('anonymous-queue', connectionUrl, {
+      priority: 3, // Ưu tiên thấp nhất
+      redis: {
+        maxRetriesPerRequest: 3,
+        connectTimeout: 5000,
+        enableReadyCheck: true
+      }
     });
     
-    // Xử lý công việc tải video với số lượng worker khác nhau
-    queue.process('downloadVideo', concurrency, processVideoJob);
-  };
-  
-  // Cấu hình từng hàng đợi với số lượng worker khác nhau
-  configureQueue(premiumQueue, 'premium-queue', 5); // Premium có nhiều worker nhất
-  configureQueue(freeQueue, 'free-queue', 3);       // Free có số worker trung bình
-  configureQueue(anonymousQueue, 'anonymous-queue', 2); // Anonymous có ít worker nhất
-  
-  // Kiểm tra kết nối Redis
-  premiumQueue.client.ping().then(() => {
+    // Cấu hình các hàng đợi
+    const configureQueue = (queue, name, concurrency) => {
+      queue.on('error', (error) => {
+        console.error(`[QUEUE] Error in ${name}: ${error.message}`);
+        if (redisAvailable) {
+          console.log(`[QUEUE] Switching to direct processing mode due to error in ${name}`);
+          redisAvailable = false;
+        }
+      });
+      
+      queue.on('failed', (job, error) => {
+        console.error(`[QUEUE] Job ${job.id} in ${name} failed: ${error.message}`);
+      });
+      
+      queue.on('completed', (job, result) => {
+        console.log(`[QUEUE] Job ${job.id} in ${name} completed with result:`, result);
+      });
+      
+      // Xử lý công việc tải video với số lượng worker khác nhau
+      queue.process('downloadVideo', concurrency, processVideoJob);
+    };
+    
+    // Cấu hình từng hàng đợi với số lượng worker khác nhau
+    configureQueue(premiumQueue, 'premium-queue', 5); // Premium có nhiều worker nhất
+    configureQueue(freeQueue, 'free-queue', 3);       // Free có số worker trung bình
+    configureQueue(anonymousQueue, 'anonymous-queue', 2); // Anonymous có ít worker nhất
+    
+    // Kiểm tra kết nối Redis với timeout
+    const pingPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Redis ping timeout after 5 seconds'));
+      }, 5000);
+      
+      premiumQueue.client.ping()
+        .then(() => {
+          clearTimeout(timeout);
+          resolve(true);
+        })
+        .catch((err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+    });
+    
+    await pingPromise;
     console.log('[QUEUE] Successfully connected to Redis');
     redisAvailable = true;
     
     // Khởi tạo giám sát tải hệ thống
     updateSystemLoad();
-  }).catch((err) => {
-    console.error('[QUEUE] Redis connection failed:', err.message);
+    
+    return true;
+  } catch (error) {
+    console.error(`[QUEUE] Redis connection failed: ${error.message}`);
+    console.log('[QUEUE] Switching to direct processing mode');
     redisAvailable = false;
-  });
-  
-} catch (error) {
+    return false;
+  }
+};
+
+// Thử kết nối đến Redis và tạo các hàng đợi
+initializeRedisQueues().catch(error => {
   console.error(`[QUEUE] Failed to initialize queues: ${error.message}`);
   redisAvailable = false;
-}
+});
 
 // Hàm thêm job vào queue hoặc xử lý trực tiếp
 const addVideoJob = async (jobData) => {
+  // Nếu Redis không khả dụng, thử kết nối lại một lần
   if (!redisAvailable) {
-    console.log('[QUEUE] Redis not available, processing directly');
+    console.log('[QUEUE] Redis not available, attempting to reconnect...');
+    try {
+      const reconnected = await initializeRedisQueues();
+      if (!reconnected) {
+        console.log('[QUEUE] Redis reconnection failed, processing directly');
+        return processVideoDirectly(jobData);
+      }
+    } catch (error) {
+      console.log('[QUEUE] Redis reconnection error, processing directly:', error.message);
+      return processVideoDirectly(jobData);
+    }
+  }
+  
+  // Nếu Redis vẫn không khả dụng sau khi thử kết nối lại, xử lý trực tiếp
+  if (!redisAvailable) {
+    console.log('[QUEUE] Redis still not available, processing directly');
     return processVideoDirectly(jobData);
   }
   
@@ -328,7 +392,7 @@ const addVideoJob = async (jobData) => {
     const { userId, settings } = jobData;
     
     // Xác định loại người dùng
-    const userType = userId 
+    const userType = userId
       ? await User.findById(userId).then(user => user.subscription)
       : 'anonymous';
     
@@ -347,8 +411,24 @@ const addVideoJob = async (jobData) => {
       queueName = 'anonymous-queue';
     }
     
-    // Thêm job vào hàng đợi tương ứng
-    const job = await targetQueue.add('downloadVideo', jobData);
+    // Thêm job vào hàng đợi tương ứng với timeout
+    const addJobPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Add job timeout after 5 seconds'));
+      }, 5000);
+      
+      targetQueue.add('downloadVideo', jobData)
+        .then(job => {
+          clearTimeout(timeout);
+          resolve(job);
+        })
+        .catch(err => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+    });
+    
+    const job = await addJobPromise;
     console.log(`[QUEUE] Added job ${job.id} to ${queueName}`);
     
     // Thêm thông tin về thời gian chờ ước tính
@@ -374,8 +454,8 @@ const addVideoJob = async (jobData) => {
       }
     }
     
-    return { 
-      jobId: job.id, 
+    return {
+      jobId: job.id,
       queued: true,
       queueType: queueName,
       estimatedWaitTime
@@ -383,6 +463,10 @@ const addVideoJob = async (jobData) => {
   } catch (error) {
     console.error(`[QUEUE] Error adding job to queue: ${error.message}`);
     console.log('[QUEUE] Falling back to direct processing');
+    // Đánh dấu Redis không khả dụng nếu lỗi liên quan đến kết nối
+    if (error.message.includes('connect') || error.message.includes('timeout')) {
+      redisAvailable = false;
+    }
     return processVideoDirectly(jobData);
   }
 };
@@ -408,9 +492,35 @@ const getSystemStatus = () => {
   };
 };
 
+// Hàm dọn dẹp khi tắt ứng dụng
+const cleanupQueues = async () => {
+  if (redisAvailable) {
+    try {
+      console.log('[QUEUE] Cleaning up queues before shutdown');
+      if (premiumQueue) await premiumQueue.close();
+      if (freeQueue) await freeQueue.close();
+      if (anonymousQueue) await anonymousQueue.close();
+    } catch (error) {
+      console.error('[QUEUE] Error during cleanup:', error.message);
+    }
+  }
+};
+
+// Đăng ký sự kiện dọn dẹp khi tắt ứng dụng
+process.on('SIGINT', async () => {
+  await cleanupQueues();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await cleanupQueues();
+  process.exit(0);
+});
+
 module.exports = {
   addVideoJob,
   processVideoDirectly,
   isRedisAvailable: () => redisAvailable,
-  getSystemStatus
+  getSystemStatus,
+  initializeRedisQueues // Export hàm này để có thể gọi từ bên ngoài nếu cần
 };

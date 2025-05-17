@@ -173,9 +173,13 @@ exports.apiLimiter = rateLimit({
   max: 100, // Giới hạn mỗi IP 100 yêu cầu mỗi 15 phút
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Quá nhiều yêu cầu từ IP này, vui lòng thử lại sau 15 phút'
+  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  handler: (req, res, next, options) => {
+    console.log('[RATE_LIMIT] API limit reached for IP:', req.ip);
+    return res.status(options.statusCode).json({
+      success: false,
+      message: 'Quá nhiều yêu cầu từ IP này, vui lòng thử lại sau 15 phút'
+    });
   }
 });
 
@@ -185,9 +189,13 @@ exports.authLimiter = rateLimit({
   max: 10, // Giới hạn mỗi IP 10 yêu cầu đăng nhập/đăng ký mỗi giờ
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Quá nhiều yêu cầu đăng nhập/đăng ký từ IP này, vui lòng thử lại sau 1 giờ'
+  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  handler: (req, res, next, options) => {
+    console.log('[RATE_LIMIT] Auth limit reached for IP:', req.ip);
+    return res.status(options.statusCode).json({
+      success: false,
+      message: 'Quá nhiều yêu cầu đăng nhập/đăng ký từ IP này, vui lòng thử lại sau 1 giờ'
+    });
   }
 });
 
@@ -197,9 +205,13 @@ const downloadRateLimiter = rateLimit({
   max: 10, // Giới hạn mỗi IP 10 yêu cầu tải mỗi 5 phút
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Quá nhiều yêu cầu tải từ IP này, vui lòng thử lại sau 5 phút'
+  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  handler: (req, res, next, options) => {
+    console.log('[RATE_LIMIT] Download limit reached for IP:', req.ip);
+    return res.status(options.statusCode).json({
+      success: false,
+      message: 'Quá nhiều yêu cầu tải từ IP này, vui lòng thử lại sau 5 phút'
+    });
   }
 });
 
@@ -209,9 +221,13 @@ exports.videoInfoLimiter = rateLimit({
   max: 30, // Giới hạn mỗi IP 30 yêu cầu mỗi 10 phút
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Quá nhiều yêu cầu lấy thông tin video từ IP này, vui lòng thử lại sau 10 phút'
+  trustProxy: true, // Thêm tùy chọn này để tin tưởng proxy trên Render.com
+  handler: (req, res, next, options) => {
+    console.log('[RATE_LIMIT] Video info limit reached for IP:', req.ip);
+    return res.status(options.statusCode).json({
+      success: false,
+      message: 'Quá nhiều yêu cầu lấy thông tin video từ IP này, vui lòng thử lại sau 10 phút'
+    });
   }
 });
 
