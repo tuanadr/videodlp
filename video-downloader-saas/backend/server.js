@@ -30,6 +30,9 @@ const referralRoutes = require('./routes/referral'); // Thêm routes cho referra
 
 const app = express();
 
+// Cấu hình trust proxy cho Render.com
+app.set('trust proxy', true);
+
 // Middleware bảo mật
 app.use(configureHelmet()); // Thiết lập các HTTP headers bảo mật
 app.use(secureHeaders); // Thiết lập các headers bảo mật bổ sung
