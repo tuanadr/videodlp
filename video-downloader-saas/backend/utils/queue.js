@@ -265,21 +265,25 @@ const initializeRedisQueues = async () => {
     // Kiểm tra biến môi trường REDIS_URL
     const redisUrl = process.env.REDIS_URL;
     
-    // Nếu không có REDIS_URL, thử kết nối đến Redis cục bộ
-    const connectionUrl = redisUrl || 'redis://127.0.0.1:6379';
+    // Nếu không có REDIS_URL, không cố gắng kết nối đến Redis cục bộ
+    if (!redisUrl) {
+      console.log('[QUEUE] No REDIS_URL provided, using direct processing mode');
+      redisAvailable = false;
+      return false;
+    }
     
-    console.log(`[QUEUE] Attempting to connect to Redis at ${redisUrl ? 'REDIS_URL' : 'localhost:6379'}`);
+    console.log(`[QUEUE] Attempting to connect to Redis at REDIS_URL`);
     
     // Tạo các hàng đợi với mức ưu tiên khác nhau
-    premiumQueue = new Queue('premium-queue', connectionUrl, {
+    premiumQueue = new Queue('premium-queue', redisUrl, {
       priority: 1 // Ưu tiên cao nhất
     });
     
-    freeQueue = new Queue('free-queue', connectionUrl, {
+    freeQueue = new Queue('free-queue', redisUrl, {
       priority: 2 // Ưu tiên trung bình
     });
     
-    anonymousQueue = new Queue('anonymous-queue', connectionUrl, {
+    anonymousQueue = new Queue('anonymous-queue', redisUrl, {
       priority: 3 // Ưu tiên thấp nhất
     });
     
@@ -326,12 +330,27 @@ const initializeRedisQueues = async () => {
   } catch (error) {
     console.error(`[QUEUE] Redis connection failed: ${error.message}`);
     console.log('[QUEUE] Switching to direct processing mode');
+    
+    // Đóng các kết nối nếu đã tạo
+    try {
+      if (premiumQueue) await premiumQueue.close();
+      if (freeQueue) await freeQueue.close();
+      if (anonymousQueue) await anonymousQueue.close();
+    } catch (closeError) {
+      console.error(`[QUEUE] Error closing queues: ${closeError.message}`);
+    }
+    
+    // Đặt các biến queue về null
+    premiumQueue = null;
+    freeQueue = null;
+    anonymousQueue = null;
+    
     redisAvailable = false;
     return false;
   }
 };
 
-// Thử kết nối đến Redis và tạo các hàng đợi
+// Thử kết nối đến Redis và tạo các hàng đợi - chỉ một lần khi khởi động
 initializeRedisQueues().catch(error => {
   console.error(`[QUEUE] Failed to initialize queues: ${error.message}`);
   redisAvailable = false;
@@ -339,24 +358,9 @@ initializeRedisQueues().catch(error => {
 
 // Hàm thêm job vào queue hoặc xử lý trực tiếp
 const addVideoJob = async (jobData) => {
-  // Nếu Redis không khả dụng, thử kết nối lại một lần
-  if (!redisAvailable) {
-    console.log('[QUEUE] Redis not available, attempting to reconnect...');
-    try {
-      const reconnected = await initializeRedisQueues();
-      if (!reconnected) {
-        console.log('[QUEUE] Redis reconnection failed, processing directly');
-        return processVideoDirectly(jobData);
-      }
-    } catch (error) {
-      console.log('[QUEUE] Redis reconnection error, processing directly:', error.message);
-      return processVideoDirectly(jobData);
-    }
-  }
-  
-  // Nếu Redis vẫn không khả dụng sau khi thử kết nối lại, xử lý trực tiếp
-  if (!redisAvailable) {
-    console.log('[QUEUE] Redis still not available, processing directly');
+  // Nếu Redis không khả dụng, xử lý trực tiếp
+  if (!redisAvailable || !premiumQueue || !freeQueue || !anonymousQueue) {
+    console.log('[QUEUE] Redis not available, processing directly');
     return processVideoDirectly(jobData);
   }
   
