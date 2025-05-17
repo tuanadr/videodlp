@@ -101,9 +101,22 @@ app.use('/downloads', express.static(path.join(__dirname, 'downloads'), {
   etag: true
 }));
 
-// CSRF protection (chỉ áp dụng cho các routes không phải API)
+// CSRF protection (chỉ áp dụng cho các routes cần bảo vệ, không áp dụng cho routes xác thực)
 if (process.env.NODE_ENV === 'production') {
-  app.use('/api', configureCsrf());
+  // Loại trừ các routes xác thực khỏi CSRF protection
+  const csrfProtection = (req, res, next) => {
+    // Bỏ qua CSRF cho routes đăng nhập/đăng ký
+    if (req.path.startsWith('/api/auth/login') ||
+        req.path.startsWith('/api/auth/register') ||
+        req.path.startsWith('/api/auth/refresh-token')) {
+      return next();
+    }
+    
+    // Áp dụng CSRF cho các routes khác
+    return configureCsrf()(req, res, next);
+  };
+  
+  app.use('/api', csrfProtection);
   app.use('/api', handleCsrfError);
   app.use('/api', setCsrfToken);
 }
