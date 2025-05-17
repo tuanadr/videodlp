@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const RefreshToken = require('../models/RefreshToken');
+const { User, RefreshToken } = require('../models');
 const rateLimit = require('express-rate-limit');
+const { Op } = require('sequelize');
 
 /**
  * Bảo vệ các route yêu cầu đăng nhập
@@ -32,7 +32,7 @@ exports.protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Tìm người dùng từ token
-    req.user = await User.findById(decoded.id);
+    req.user = await User.findByPk(decoded.id);
 
     // Kiểm tra nếu người dùng không tồn tại hoặc không hoạt động
     if (!req.user || !req.user.isActive) {
@@ -43,7 +43,8 @@ exports.protect = async (req, res, next) => {
     }
 
     // Cập nhật thời gian đăng nhập cuối cùng
-    await User.findByIdAndUpdate(req.user.id, { lastLoginAt: new Date() });
+    req.user.lastLoginAt = new Date();
+    await req.user.save();
 
     next();
   } catch (err) {
@@ -83,9 +84,17 @@ exports.verifyRefreshToken = async (req, res, next) => {
   try {
     // Tìm refresh token trong database
     const storedToken = await RefreshToken.findOne({
-      token: refreshToken,
-      isRevoked: false
-    }).populate('user');
+      where: {
+        token: refreshToken,
+        isRevoked: false
+      },
+      include: [
+        {
+          model: User,
+          as: 'user'
+        }
+      ]
+    });
 
     if (!storedToken) {
       return res.status(401).json({
@@ -97,7 +106,8 @@ exports.verifyRefreshToken = async (req, res, next) => {
     // Kiểm tra xem token đã hết hạn chưa
     if (storedToken.expiresAt < new Date()) {
       // Đánh dấu token đã hết hạn
-      await RefreshToken.findByIdAndUpdate(storedToken._id, { isRevoked: true });
+      storedToken.isRevoked = true;
+      await storedToken.save();
       
       return res.status(401).json({
         success: false,
@@ -109,7 +119,7 @@ exports.verifyRefreshToken = async (req, res, next) => {
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
 
     // Kiểm tra xem user ID trong token có khớp với user ID trong database không
-    if (decoded.id !== storedToken.user._id.toString()) {
+    if (decoded.id !== storedToken.user.id.toString()) {
       return res.status(401).json({
         success: false,
         message: 'Refresh token không hợp lệ'
@@ -282,7 +292,7 @@ exports.optionalAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Tìm người dùng từ token
-    const user = await User.findById(decoded.id);
+    const user = await User.findByPk(decoded.id);
     
     // Kiểm tra nếu người dùng tồn tại và đang hoạt động
     if (user && user.isActive) {
@@ -320,11 +330,16 @@ exports.optionalAuth = async (req, res, next) => {
 exports.revokeRefreshTokens = async (userId) => {
   try {
     // Đánh dấu tất cả refresh token của người dùng là đã thu hồi
-    await RefreshToken.updateMany(
-      { user: userId, isRevoked: false },
-      { isRevoked: true }
+    const result = await RefreshToken.update(
+      { isRevoked: true },
+      {
+        where: {
+          userId: userId,
+          isRevoked: false
+        }
+      }
     );
-    return true;
+    return result[0] > 0; // Trả về true nếu có ít nhất một token bị thu hồi
   } catch (error) {
     console.error('Error revoking refresh tokens:', error);
     return false;
@@ -337,14 +352,16 @@ exports.revokeRefreshTokens = async (userId) => {
  */
 exports.cleanupExpiredTokens = async () => {
   try {
-    const result = await RefreshToken.deleteMany({
-      $or: [
-        { expiresAt: { $lt: new Date() } },
-        { isRevoked: true }
-      ]
+    const result = await RefreshToken.destroy({
+      where: {
+        [Op.or]: [
+          { expiresAt: { [Op.lt]: new Date() } },
+          { isRevoked: true }
+        ]
+      }
     });
-    console.log(`Đã xóa ${result.deletedCount} refresh token hết hạn hoặc đã thu hồi`);
-    return result.deletedCount;
+    console.log(`Đã xóa ${result} refresh token hết hạn hoặc đã thu hồi`);
+    return result;
   } catch (error) {
     console.error('Error cleaning up expired tokens:', error);
     return 0;

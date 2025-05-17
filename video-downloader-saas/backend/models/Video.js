@@ -1,60 +1,72 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
+const sequelize = require('../database');
 
-const VideoSchema = new mongoose.Schema({
+class Video extends Model {}
+
+Video.init({
   title: {
-    type: String,
-    required: [true, 'Vui lòng nhập tiêu đề video'],
-    trim: true,
-    maxlength: [200, 'Tiêu đề không được vượt quá 200 ký tự']
+    type: DataTypes.STRING(200),
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Vui lòng nhập tiêu đề video' },
+      len: { args: [1, 200], msg: 'Tiêu đề không được vượt quá 200 ký tự' }
+    }
   },
   url: {
-    type: String,
-    required: [true, 'Vui lòng nhập URL video'],
-    // Sửa regex để chấp nhận nhiều loại URL hơn, bao gồm URL có query parameters
-    match: [
-      /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[^<>'"]*)?$/,
-      'Vui lòng nhập URL hợp lệ'
-    ]
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Vui lòng nhập URL video' }
+    }
   },
   thumbnail: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
   duration: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
   formats: {
-    type: Array
+    type: DataTypes.JSON,
+    allowNull: true
   },
   formatId: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
   downloadPath: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
   status: {
-    type: String,
-    enum: ['pending', 'processing', 'completed', 'failed'],
-    default: 'pending'
+    type: DataTypes.ENUM('pending', 'processing', 'completed', 'failed'),
+    defaultValue: 'pending'
   },
   progress: {
-    type: Number,
-    min: 0,
-    max: 100,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    validate: {
+      min: 0,
+      max: 100
+    }
   },
   error: {
-    type: String
+    type: DataTypes.TEXT,
+    allowNull: true
   },
-  user: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'User',
-    // Cho phép video không có người dùng (tải xuống không cần đăng nhập)
-    required: false
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   }
+}, {
+  sequelize,
+  modelName: 'Video',
+  timestamps: true
 });
 
-module.exports = mongoose.model('Video', VideoSchema);
+module.exports = Video;

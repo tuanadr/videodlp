@@ -1,96 +1,93 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
+const sequelize = require('../database');
 
-/**
- * Schema cho Refresh Token
- * Lưu trữ các refresh token đã cấp cho người dùng
- * Cho phép thu hồi token khi cần thiết (đăng xuất, thay đổi mật khẩu, v.v.)
- */
-const RefreshTokenSchema = new mongoose.Schema({
-  // Người dùng sở hữu token
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  
-  // Token JWT
+class RefreshToken extends Model {
+  // Kiểm tra token đã hết hạn chưa
+  isExpired() {
+    return this.expiresAt < new Date();
+  }
+
+  // Thu hồi token
+  async revoke() {
+    this.isRevoked = true;
+    return this.save();
+  }
+
+  // Tìm token hợp lệ
+  static async findValidToken(token) {
+    const { Op } = require('sequelize');
+    return this.findOne({
+      where: {
+        token,
+        isRevoked: false,
+        expiresAt: { [Op.gt]: new Date() }
+      },
+      include: [
+        {
+          model: sequelize.models.User,
+          as: 'user'
+        }
+      ]
+    });
+  }
+
+  // Tạo token mới
+  static async createToken(user, token, expiresAt, userAgent, ipAddress) {
+    return this.create({
+      userId: user.id,
+      token,
+      expiresAt,
+      userAgent,
+      ipAddress
+    });
+  }
+}
+
+RefreshToken.init({
   token: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true
   },
-  
-  // Thời gian hết hạn
   expiresAt: {
-    type: Date,
-    required: true
+    type: DataTypes.DATE,
+    allowNull: false
   },
-  
-  // Thông tin thiết bị đăng nhập
   userAgent: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
-  
-  // IP đăng nhập
   ipAddress: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
-  
-  // Trạng thái token (đã thu hồi hay chưa)
   isRevoked: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
-  
-  // Thời gian tạo token
-  createdAt: {
-    type: Date,
-    default: Date.now
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   }
+}, {
+  sequelize,
+  modelName: 'RefreshToken',
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['token']
+    },
+    {
+      fields: ['userId']
+    },
+    {
+      fields: ['expiresAt']
+    }
+  ]
 });
 
-// Index để tìm kiếm nhanh
-RefreshTokenSchema.index({ user: 1 });
-RefreshTokenSchema.index({ token: 1 });
-RefreshTokenSchema.index({ expiresAt: 1 });
-
-/**
- * Phương thức kiểm tra token đã hết hạn chưa
- */
-RefreshTokenSchema.methods.isExpired = function() {
-  return this.expiresAt < new Date();
-};
-
-/**
- * Phương thức thu hồi token
- */
-RefreshTokenSchema.methods.revoke = async function() {
-  this.isRevoked = true;
-  return this.save();
-};
-
-/**
- * Phương thức tĩnh để tạo refresh token mới
- */
-RefreshTokenSchema.statics.createToken = async function(user, token, expiresAt, userAgent, ipAddress) {
-  return this.create({
-    user: user._id,
-    token,
-    expiresAt,
-    userAgent,
-    ipAddress
-  });
-};
-
-/**
- * Phương thức tĩnh để tìm token hợp lệ
- */
-RefreshTokenSchema.statics.findValidToken = async function(token) {
-  return this.findOne({
-    token,
-    isRevoked: false,
-    expiresAt: { $gt: new Date() }
-  }).populate('user');
-};
-
-module.exports = mongoose.model('RefreshToken', RefreshTokenSchema);
+module.exports = RefreshToken;

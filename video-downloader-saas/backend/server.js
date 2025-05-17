@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
 const path = require('path');
 const morgan = require('morgan'); // Thêm morgan cho logging
 const compression = require('express-compression'); // Thêm compression
@@ -156,25 +155,32 @@ app.use((req, res) => {
 const { cleanupExpiredTokens } = require('./middleware/auth');
 setInterval(cleanupExpiredTokens, 24 * 60 * 60 * 1000);
 
-// Kết nối MongoDB
-const connectDB = async () => {
+// Import database và models
+const { sequelize } = require('./models');
+
+// Khởi động máy chủ
+const PORT = process.env.PORT || 5000;
+const startServer = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+    // Kiểm tra kết nối đến SQLite
+    await sequelize.authenticate();
+    console.log('Kết nối SQLite thành công');
+    
+    // Đồng bộ hóa các models với cơ sở dữ liệu
+    if (process.env.USE_SQLITE === 'true') {
+      await sequelize.sync({ alter: true });
+      console.log('Đồng bộ hóa cơ sở dữ liệu SQLite thành công');
+    }
+    
+    // Khởi động máy chủ
+    app.listen(PORT, () => {
+      console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
     });
-    console.log('Kết nối MongoDB thành công');
   } catch (error) {
-    console.error('Lỗi kết nối MongoDB:', error.message);
+    console.error('Lỗi khởi động máy chủ:', error);
     process.exit(1);
   }
 };
 
 // Khởi động máy chủ
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
-});
-
-// Kết nối đến cơ sở dữ liệu
-connectDB();
+startServer();

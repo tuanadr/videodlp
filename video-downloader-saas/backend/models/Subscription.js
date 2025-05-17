@@ -1,49 +1,53 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
+const sequelize = require('../database');
 
-const SubscriptionSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'User',
-    required: true
-  },
+class Subscription extends Model {}
+
+Subscription.init({
   stripeSubscriptionId: {
-    type: String,
-    required: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   stripePriceId: {
-    type: String,
-    required: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   stripeCustomerId: {
-    type: String,
-    required: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   status: {
-    type: String,
-    enum: ['active', 'canceled', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired'],
-    default: 'active'
+    type: DataTypes.ENUM('active', 'canceled', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired'),
+    defaultValue: 'active'
   },
   plan: {
-    type: String,
-    enum: ['premium'],
-    default: 'premium'
+    type: DataTypes.ENUM('premium'),
+    defaultValue: 'premium'
   },
   currentPeriodStart: {
-    type: Date,
-    required: true
+    type: DataTypes.DATE,
+    allowNull: false
   },
   currentPeriodEnd: {
-    type: Date,
-    required: true
+    type: DataTypes.DATE,
+    allowNull: false
   },
   cancelAtPeriodEnd: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   }
+}, {
+  sequelize,
+  modelName: 'Subscription',
+  timestamps: true
 });
 
-module.exports = mongoose.model('Subscription', SubscriptionSchema);
+module.exports = Subscription;

@@ -1,251 +1,193 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const sequelize = require('../database');
 
-const UserSchema = new mongoose.Schema({
+class User extends Model {
+  // Tạo JWT access token
+  getSignedJwtToken() {
+    return jwt.sign(
+      {
+        id: this.id,
+        role: this.role,
+        subscription: this.subscription
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: process.env.JWT_EXPIRE || '1h'
+      }
+    );
+  }
+
+  // Tạo JWT refresh token
+  getRefreshToken() {
+    return jwt.sign(
+      {
+        id: this.id
+      },
+      process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
+      {
+        expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d'
+      }
+    );
+  }
+
+  // So sánh mật khẩu nhập vào với mật khẩu đã mã hóa
+  async matchPassword(enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
+  }
+
+  // Reset đếm lượt tải xuống hàng ngày
+  resetDailyDownloadCount() {
+    const today = new Date();
+    const lastDownload = this.lastDownloadDate;
+    
+    // Nếu ngày cuối cùng tải xuống không phải là hôm nay, reset đếm
+    if (!lastDownload || lastDownload.getDate() !== today.getDate() || 
+        lastDownload.getMonth() !== today.getMonth() || 
+        lastDownload.getFullYear() !== today.getFullYear()) {
+      this.dailyDownloadCount = 0;
+    }
+  }
+
+  // Phương thức sử dụng lượt tải thưởng
+  useBonusDownload() {
+    if (this.bonusDownloads > 0) {
+      this.bonusDownloads -= 1;
+      return true;
+    }
+    return false;
+  }
+
+  // Phương thức thêm lượt tải thưởng
+  addBonusDownloads(count) {
+    this.bonusDownloads += count;
+  }
+}
+
+User.init({
   name: {
-    type: String,
-    required: [true, 'Vui lòng nhập tên'],
-    trim: true,
-    maxlength: [50, 'Tên không được vượt quá 50 ký tự']
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Vui lòng nhập tên' },
+      len: { args: [1, 50], msg: 'Tên không được vượt quá 50 ký tự' }
+    }
   },
   email: {
-    type: String,
-    required: [true, 'Vui lòng nhập email'],
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-      'Vui lòng nhập email hợp lệ'
-    ]
+    validate: {
+      notEmpty: { msg: 'Vui lòng nhập email' },
+      isEmail: { msg: 'Vui lòng nhập email hợp lệ' }
+    }
   },
   password: {
-    type: String,
-    required: [true, 'Vui lòng nhập mật khẩu'],
-    minlength: [6, 'Mật khẩu phải có ít nhất 6 ký tự'],
-    select: false
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Vui lòng nhập mật khẩu' },
+      len: { args: [6], msg: 'Mật khẩu phải có ít nhất 6 ký tự' }
+    }
   },
   role: {
-    type: String,
-    enum: ['user', 'admin'],
-    default: 'user'
+    type: DataTypes.ENUM('user', 'admin'),
+    defaultValue: 'user'
   },
   subscription: {
-    type: String,
-    enum: ['free', 'premium'],
-    default: 'free'
+    type: DataTypes.ENUM('free', 'premium'),
+    defaultValue: 'free'
   },
   stripeCustomerId: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
   downloadCount: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
   dailyDownloadCount: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
   lastDownloadDate: {
-    type: Date
+    type: DataTypes.DATE,
+    allowNull: true
   },
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
-  // Các trường cho tính năng mời bạn bè
   referralCode: {
-    type: String,
+    type: DataTypes.STRING,
     unique: true,
-    sparse: true,
-    index: true
+    allowNull: true
   },
   referredBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
   bonusDownloads: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
-  referralHistory: [
-    {
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-      },
-      timestamp: {
-        type: Date,
-        default: Date.now
-      },
-      rewarded: {
-        type: Boolean,
-        default: false
-      }
-    }
-  ],
   referralStats: {
-    totalReferred: {
-      type: Number,
-      default: 0
-    },
-    successfulReferrals: {
-      type: Number,
-      default: 0
+    type: DataTypes.JSON,
+    defaultValue: {
+      totalReferred: 0,
+      successfulReferrals: 0
     }
   },
-  resetPasswordToken: String,
-  resetPasswordExpire: Date,
-  createdAt: {
-    type: Date,
-    default: Date.now
+  resetPasswordToken: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resetPasswordExpire: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
   lastLoginAt: {
-    type: Date
+    type: DataTypes.DATE,
+    allowNull: true
   }
+}, {
+  sequelize,
+  modelName: 'User',
+  timestamps: true
 });
 
-// Tạo mã giới thiệu ngẫu nhiên
-const generateReferralCode = () => {
-  // Tạo chuỗi ngẫu nhiên 8 ký tự
-  const randomBytes = crypto.randomBytes(4);
-  return randomBytes.toString('hex').toUpperCase();
-};
-
-// Mã hóa mật khẩu và tạo mã giới thiệu trước khi lưu
-UserSchema.pre('save', async function(next) {
+// Hooks
+User.beforeCreate(async (user) => {
   // Tạo mã giới thiệu nếu chưa có
-  if (!this.referralCode) {
-    let isUnique = false;
-    let attempts = 0;
-    let code;
-    
-    // Đảm bảo mã là duy nhất
-    while (!isUnique && attempts < 5) {
-      // Tạo mã từ 3 ký tự đầu của tên người dùng + 5 ký tự ngẫu nhiên
-      const namePrefix = this.name.substring(0, 3).toUpperCase();
-      const randomPart = generateReferralCode().substring(0, 5);
-      code = `${namePrefix}${randomPart}`;
-      
-      // Kiểm tra xem mã đã tồn tại chưa
-      const existingUser = await this.constructor.findOne({ referralCode: code });
-      if (!existingUser) {
-        isUnique = true;
-        this.referralCode = code;
-      } else {
-        attempts++;
-      }
-    }
-    
-    // Nếu không thể tạo mã duy nhất sau 5 lần thử, sử dụng mã hoàn toàn ngẫu nhiên
-    if (!isUnique) {
-      this.referralCode = `REF${generateReferralCode()}`;
-    }
+  if (!user.referralCode) {
+    const generateReferralCode = () => {
+      const randomBytes = crypto.randomBytes(4);
+      return randomBytes.toString('hex').toUpperCase();
+    };
+
+    // Tạo mã từ 3 ký tự đầu của tên người dùng + 5 ký tự ngẫu nhiên
+    const namePrefix = user.name.substring(0, 3).toUpperCase();
+    const randomPart = generateReferralCode().substring(0, 5);
+    user.referralCode = `${namePrefix}${randomPart}`;
   }
 
+  // Mã hóa mật khẩu
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(user.password, salt);
+});
+
+User.beforeUpdate(async (user) => {
   // Mã hóa mật khẩu nếu đã thay đổi
-  if (this.isModified('password')) {
+  if (user.changed('password')) {
     const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+    user.password = await bcrypt.hash(user.password, salt);
   }
 });
 
-// Tạo JWT access token
-UserSchema.methods.getSignedJwtToken = function() {
-  return jwt.sign(
-    {
-      id: this._id,
-      role: this.role,
-      subscription: this.subscription
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_EXPIRE || '1h' // Mặc định 1 giờ nếu không có cấu hình
-    }
-  );
-};
-
-// Tạo JWT refresh token
-UserSchema.methods.getRefreshToken = function() {
-  return jwt.sign(
-    {
-      id: this._id
-    },
-    process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d' // Mặc định 7 ngày nếu không có cấu hình
-    }
-  );
-};
-
-// Tạo và lưu refresh token vào database
-UserSchema.methods.createRefreshToken = async function(userAgent, ipAddress) {
-  // Tạo refresh token
-  const refreshToken = this.getRefreshToken();
-  
-  // Tính thời gian hết hạn
-  const expiresIn = process.env.REFRESH_TOKEN_EXPIRE || '7d';
-  const expiresAt = new Date();
-  
-  // Chuyển đổi thời gian hết hạn từ chuỗi sang milliseconds
-  if (expiresIn.endsWith('d')) {
-    expiresAt.setDate(expiresAt.getDate() + parseInt(expiresIn));
-  } else if (expiresIn.endsWith('h')) {
-    expiresAt.setHours(expiresAt.getHours() + parseInt(expiresIn));
-  } else if (expiresIn.endsWith('m')) {
-    expiresAt.setMinutes(expiresAt.getMinutes() + parseInt(expiresIn));
-  } else {
-    // Mặc định 7 ngày
-    expiresAt.setDate(expiresAt.getDate() + 7);
-  }
-  
-  // Lưu refresh token vào database
-  const RefreshToken = require('./RefreshToken');
-  const savedToken = await RefreshToken.createToken(
-    this,
-    refreshToken,
-    expiresAt,
-    userAgent,
-    ipAddress
-  );
-  
-  return {
-    token: refreshToken,
-    expiresAt
-  };
-};
-
-// So sánh mật khẩu nhập vào với mật khẩu đã mã hóa
-UserSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
-};
-
-// Reset đếm lượt tải xuống hàng ngày
-UserSchema.methods.resetDailyDownloadCount = function() {
-  const today = new Date();
-  const lastDownload = this.lastDownloadDate;
-  
-  // Nếu ngày cuối cùng tải xuống không phải là hôm nay, reset đếm
-  if (!lastDownload || lastDownload.getDate() !== today.getDate() || 
-      lastDownload.getMonth() !== today.getMonth() || 
-      lastDownload.getFullYear() !== today.getFullYear()) {
-    this.dailyDownloadCount = 0;
-  }
-};
-
-// Phương thức sử dụng lượt tải thưởng
-UserSchema.methods.useBonusDownload = function() {
-  if (this.bonusDownloads > 0) {
-    this.bonusDownloads -= 1;
-    return true;
-  }
-  return false;
-};
-
-// Phương thức thêm lượt tải thưởng
-UserSchema.methods.addBonusDownloads = function(count) {
-  this.bonusDownloads += count;
-};
-
-module.exports = mongoose.model('User', UserSchema);
+module.exports = User;
