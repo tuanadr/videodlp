@@ -45,6 +45,7 @@ video-downloader-saas/
 │   ├── .env.coolify         # Biến môi trường cho Coolify
 │   ├── .env.local           # Biến môi trường cho phát triển
 │   ├── Dockerfile           # Cấu hình Docker cho backend
+│   ├── docker-compose.yml   # Cấu hình Docker Compose cho backend
 │   └── ...
 ├── frontend/                # Frontend React
 │   ├── .env.coolify         # Biến môi trường cho Coolify
@@ -140,28 +141,49 @@ Nếu bạn gặp lỗi 404 khi truy cập URL gốc của backend đã deploy t
 
 2. Tạo file `coolify.json` trong thư mục backend để cấu hình Coolify
 
-3. Cập nhật Dockerfile của backend:
+3. Tạo file `docker-compose.yml` trong thư mục backend:
+   ```yaml
+   version: '3.8'
+
+   services:
+     backend:
+       build:
+         context: .
+         dockerfile: Dockerfile
+       image: videodlp-backend:latest
+       container_name: backend
+       restart: always
+       ports:
+         - "5000:5000"
+       environment:
+         - NODE_ENV=production
+         - PORT=5000
+         - USE_SQLITE=true
+         - SQLITE_PATH=./database/videodlp.db
+         - SQLITE_PRAGMA_JOURNAL_MODE=WAL
+         - SQLITE_PRAGMA_SYNCHRONOUS=NORMAL
+         - UV_THREADPOOL_SIZE=4
+       volumes:
+         - ./downloads:/app/downloads
+         - ./logs:/app/logs
+         - ./database:/app/database
+       healthcheck:
+         test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health.txt"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+   ```
+
+4. Cập nhật Dockerfile của backend:
    - Kiểm tra xem có file tsconfig.json không trước khi build TypeScript
    - Copy tất cả các file từ build stage, không chỉ thư mục dist
    - Chạy file server.js trực tiếp, không phải dist/server.js
 
-4. Triển khai lại ứng dụng trên Coolify.io
+5. Triển khai lại ứng dụng trên Coolify.io
 
-5. Xem thêm chi tiết trong file `backend/README-COOLIFY-404-FIX.md`
+6. Nếu vẫn gặp vấn đề, hãy thử loại bỏ file docker-compose.yml và để Coolify sử dụng Nixpacks hoặc Dockerfile trực tiếp
 
-### Vấn đề về đường dẫn
-
-Nếu bạn gặp lỗi liên quan đến đường dẫn, hãy kiểm tra:
-
-1. Tất cả các đường dẫn trong mã nguồn sử dụng dấu gạch chéo (`/`) thay vì dấu gạch ngược (`\`)
-2. Module `pathUtils.js` được sử dụng để xử lý các đường dẫn
-
-### Vấn đề về quyền truy cập
-
-Nếu bạn gặp lỗi "Permission denied", hãy kiểm tra:
-
-1. Script `install-dependencies.sh` đã được thực thi
-2. Quyền truy cập của các thư mục `downloads`, `logs` và `database`
+7. Xem thêm chi tiết trong file `backend/README-COOLIFY-404-FIX.md`
 
 ## Tài liệu tham khảo
 

@@ -317,21 +317,59 @@ Nếu bạn gặp lỗi 404 khi truy cập URL gốc của backend đã deploy t
    }
    ```
 
-3. Cập nhật Dockerfile để đảm bảo nó hoạt động đúng với Coolify:
+3. Tạo file `docker-compose.yml` trong thư mục backend:
+   ```yaml
+   version: '3.8'
+
+   services:
+     backend:
+       build:
+         context: .
+         dockerfile: Dockerfile
+       image: videodlp-backend:latest
+       container_name: backend
+       restart: always
+       ports:
+         - "5000:5000"
+       environment:
+         - NODE_ENV=production
+         - PORT=5000
+         - USE_SQLITE=true
+         - SQLITE_PATH=./database/videodlp.db
+         - SQLITE_PRAGMA_JOURNAL_MODE=WAL
+         - SQLITE_PRAGMA_SYNCHRONOUS=NORMAL
+         - UV_THREADPOOL_SIZE=4
+       volumes:
+         - ./downloads:/app/downloads
+         - ./logs:/app/logs
+         - ./database:/app/database
+       healthcheck:
+         test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health.txt"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+   ```
+
+4. Cập nhật Dockerfile để đảm bảo nó hoạt động đúng với Coolify:
    - Kiểm tra xem có file tsconfig.json không trước khi build TypeScript
    - Copy tất cả các file từ build stage, không chỉ thư mục dist
    - Chạy file server.js trực tiếp, không phải dist/server.js
 
-4. Đảm bảo rằng ứng dụng đang lắng nghe trên tất cả các interface (0.0.0.0) chứ không chỉ localhost:
+5. Đảm bảo rằng ứng dụng đang lắng nghe trên tất cả các interface (0.0.0.0) chứ không chỉ localhost:
    ```javascript
    app.listen(PORT, '0.0.0.0', () => {
      console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
    });
    ```
 
-5. Nếu bạn đã thực hiện các thay đổi trên, hãy triển khai lại ứng dụng trên Coolify.io.
+6. Nếu bạn đã thực hiện các thay đổi trên, hãy triển khai lại ứng dụng trên Coolify.io.
 
-6. Để biết thêm chi tiết, hãy tham khảo file `backend/README-COOLIFY-404-FIX.md`.
+7. Nếu vẫn gặp vấn đề, hãy thử loại bỏ file docker-compose.yml và để Coolify sử dụng Nixpacks hoặc Dockerfile trực tiếp:
+   - Đổi tên hoặc xóa file docker-compose.yml trong thư mục backend
+   - Trong Coolify, cấu hình ứng dụng backend với Build Pack là Nixpacks hoặc Dockerfile
+   - Để trống trường Port trong cài đặt Coolify
+
+8. Để biết thêm chi tiết, hãy tham khảo file `backend/README-COOLIFY-404-FIX.md`.
 
 ### Vấn đề về đường dẫn
 
