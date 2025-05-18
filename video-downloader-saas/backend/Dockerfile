@@ -19,10 +19,12 @@ RUN if [ -f "tsconfig.json" ]; then npm run build; fi
 FROM node:18-alpine
 
 # Install ffmpeg and yt-dlp dependencies
-RUN apk add --no-cache ffmpeg python3 py3-pip curl bash
+RUN apk add --no-cache ffmpeg python3 py3-pip curl bash py3-virtualenv
 
-# Install yt-dlp
-RUN pip3 install --no-cache-dir yt-dlp
+# Install yt-dlp in a virtual environment
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir yt-dlp && \
+    ln -s /opt/venv/bin/yt-dlp /usr/local/bin/yt-dlp
 
 # Create app directory
 WORKDIR /app
