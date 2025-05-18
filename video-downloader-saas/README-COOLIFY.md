@@ -132,6 +132,23 @@ Nếu bạn gặp lỗi Sequelize khi triển khai backend, hãy thực hiện c
 
 4. Xem thêm chi tiết trong file `backend/README-SEQUELIZE-FIX.md`
 
+### Lỗi 404 khi truy cập Root Path của Backend
+
+Nếu bạn gặp lỗi 404 khi truy cập URL gốc của backend đã deploy trên Coolify, hãy thực hiện các bước sau:
+
+1. Tạo file `health.txt` trong thư mục gốc của backend với nội dung "OK"
+
+2. Tạo file `coolify.json` trong thư mục backend để cấu hình Coolify
+
+3. Cập nhật Dockerfile của backend:
+   - Kiểm tra xem có file tsconfig.json không trước khi build TypeScript
+   - Copy tất cả các file từ build stage, không chỉ thư mục dist
+   - Chạy file server.js trực tiếp, không phải dist/server.js
+
+4. Triển khai lại ứng dụng trên Coolify.io
+
+5. Xem thêm chi tiết trong file `backend/README-COOLIFY-404-FIX.md`
+
 ### Vấn đề về đường dẫn
 
 Nếu bạn gặp lỗi liên quan đến đường dẫn, hãy kiểm tra:

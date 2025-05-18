@@ -12,8 +12,8 @@ RUN npm ci
 # Copy the rest of the code
 COPY . .
 
-# Build TypeScript code
-RUN npm run build
+# If TypeScript is used, build it
+RUN if [ -f "tsconfig.json" ]; then npm run build; fi
 
 # Production stage
 FROM node:18-alpine
@@ -33,12 +33,8 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
-# Copy built files from build stage
-COPY --from=build /app/dist ./dist
-
-# Copy utility scripts and configuration files
-COPY utils ./utils
-COPY .env.coolify ./.env
+# Copy all files from build stage
+COPY --from=build /app .
 
 # Create necessary directories
 RUN mkdir -p downloads logs database
@@ -58,4 +54,4 @@ RUN echo "OK" > ./health.txt
 EXPOSE 5000
 
 # Start the server
-CMD ["node", "dist/server.js"]
+CMD ["node", "server.js"]
