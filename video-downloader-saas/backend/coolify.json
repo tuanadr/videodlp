@@ -5,8 +5,7 @@
     "buildArgs": {}
   },
   "deploy": {
-    "port": 5000,
-    "healthCheckPath": "/health.txt",
+    "healthCheckPath": "/",
     "healthCheckTimeout": 10,
     "healthCheckInterval": 30,
     "healthCheckRetries": 3,
