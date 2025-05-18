@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
 require('dotenv').config();
+const { sequelize } = require('../database');
 const User = require('../models/User');
 const crypto = require('crypto');
+const { Op } = require('sequelize');
 
 // Hàm tạo mã giới thiệu ngẫu nhiên
 const generateReferralCode = (name) => {
@@ -17,16 +18,13 @@ const generateReferralCode = (name) => {
   return `${prefix}${randomString}`;
 };
 
-// Kết nối MongoDB
+// Kết nối đến cơ sở dữ liệu
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('Kết nối MongoDB thành công');
+    await sequelize.authenticate();
+    console.log('Kết nối SQLite thành công');
   } catch (error) {
-    console.error('Lỗi kết nối MongoDB:', error.message);
+    console.error('Lỗi kết nối SQLite:', error.message);
     process.exit(1);
   }
 };
@@ -38,7 +36,11 @@ const updateReferralCodes = async () => {
     await connectDB();
     
     // Lấy tất cả người dùng không có mã giới thiệu
-    const users = await User.find({ referralCode: { $exists: false } });
+    const users = await User.findAll({
+      where: {
+        referralCode: null
+      }
+    });
     console.log(`Tìm thấy ${users.length} người dùng cần cập nhật mã giới thiệu`);
     
     // Cập nhật mã giới thiệu cho từng người dùng
@@ -50,7 +52,9 @@ const updateReferralCodes = async () => {
       
       // Đảm bảo mã là duy nhất
       while (!isUnique && attempts < 5) {
-        const existingUser = await User.findOne({ referralCode });
+        const existingUser = await User.findOne({
+          where: { referralCode }
+        });
         if (!existingUser) {
           isUnique = true;
         } else {
@@ -78,6 +82,7 @@ const updateReferralCodes = async () => {
     }
     
     console.log('Hoàn thành cập nhật mã giới thiệu');
+    await sequelize.close();
     process.exit(0);
   } catch (error) {
     console.error('Lỗi khi cập nhật mã giới thiệu:', error);

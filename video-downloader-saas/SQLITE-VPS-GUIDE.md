@@ -1,6 +1,6 @@
-# Chuyển đổi từ MongoDB sang SQLite và Triển khai trên VPS
+# Hướng dẫn Triển khai Ứng dụng SQLite trên VPS
 
-Hướng dẫn này giúp bạn chuyển đổi cơ sở dữ liệu từ MongoDB sang SQLite và triển khai ứng dụng trên VPS.
+Hướng dẫn này giúp bạn triển khai ứng dụng Video Downloader SaaS sử dụng SQLite trên VPS.
 
 ## 1. Cài đặt các gói cần thiết
 
@@ -31,129 +31,58 @@ sudo chmod a+rx /usr/local/bin/yt-dlp
 sudo apt-get install -y ffmpeg
 ```
 
-## 2. Cài đặt SQLite và Sequelize
+## 2. Cài đặt các gói phụ thuộc
 
 ```bash
 # Di chuyển đến thư mục backend
 cd video-downloader-saas/backend
 
-# Cài đặt SQLite và Sequelize
-npm install sqlite3 sequelize --save
+# Cài đặt các gói phụ thuộc
+npm install
+
+# Di chuyển đến thư mục frontend
+cd ../frontend
 
 # Cài đặt các gói phụ thuộc
 npm install
 ```
 
-## 3. Tạo cấu trúc thư mục cho SQLite
+## 3. Cấu hình môi trường
+
+Tạo file `.env` trong thư mục backend từ file mẫu:
 
 ```bash
-# Tạo thư mục database
-mkdir -p database/config database/models database/migrations
+# Di chuyển đến thư mục backend
+cd ../backend
+
+# Tạo file .env từ file mẫu
+cp .env.example .env
 ```
 
-## 4. Tạo các tệp cấu hình SQLite
+Chỉnh sửa file `.env` để cấu hình các biến môi trường:
 
-Tạo tệp `database/config/config.js`:
+```
+NODE_ENV=production
+PORT=5000
 
-```javascript
-require('dotenv').config();
+# JWT Configuration
+JWT_SECRET=your_jwt_secret_key
+JWT_EXPIRE=1h
+REFRESH_TOKEN_SECRET=your_refresh_token_secret
+REFRESH_TOKEN_EXPIRE=7d
 
-module.exports = {
-  development: {
-    dialect: 'sqlite',
-    storage: './database.sqlite',
-    logging: console.log,
-  },
-  test: {
-    dialect: 'sqlite',
-    storage: './database_test.sqlite',
-    logging: false,
-  },
-  production: {
-    dialect: 'sqlite',
-    storage: './database_production.sqlite',
-    logging: false,
-  }
-};
+# SQLite Configuration
+SQLITE_PATH=./database/videodlp.db
+
+# Frontend URL
+FRONTEND_URL=http://YOUR_VPS_IP:3000
+
+# Stripe Configuration (nếu sử dụng)
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
 ```
 
-Tạo tệp `database/index.js`:
-
-```javascript
-const { Sequelize } = require('sequelize');
-const config = require('./config/config');
-
-// Lấy cấu hình dựa trên môi trường
-const env = process.env.NODE_ENV || 'development';
-const dbConfig = config[env];
-
-// Khởi tạo Sequelize
-const sequelize = new Sequelize(dbConfig);
-
-// Kiểm tra kết nối
-const testConnection = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('Kết nối SQLite thành công.');
-  } catch (error) {
-    console.error('Lỗi kết nối SQLite:', error);
-    process.exit(1);
-  }
-};
-
-// Đồng bộ hóa các models với cơ sở dữ liệu
-const syncDatabase = async () => {
-  try {
-    await sequelize.sync({ alter: true });
-    console.log('Đồng bộ hóa cơ sở dữ liệu thành công.');
-  } catch (error) {
-    console.error('Lỗi đồng bộ hóa cơ sở dữ liệu:', error);
-    process.exit(1);
-  }
-};
-
-module.exports = {
-  sequelize,
-  testConnection,
-  syncDatabase,
-  Sequelize
-};
-```
-
-## 5. Cập nhật server.js
-
-Thay đổi phần kết nối MongoDB trong `server.js` thành:
-
-```javascript
-// Import database
-const { testConnection, syncDatabase } = require('./database');
-const db = require('./database/models');
-
-// Khởi động máy chủ
-const PORT = process.env.PORT || 5000;
-const startServer = async () => {
-  try {
-    // Kiểm tra kết nối đến SQLite
-    await testConnection();
-    
-    // Đồng bộ hóa các models với cơ sở dữ liệu
-    await syncDatabase();
-    
-    // Khởi động máy chủ
-    app.listen(PORT, () => {
-      console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Lỗi khởi động máy chủ:', error);
-    process.exit(1);
-  }
-};
-
-// Khởi động máy chủ
-startServer();
-```
-
-## 6. Cài đặt và cấu hình frontend
+## 4. Cấu hình frontend
 
 ```bash
 # Di chuyển đến thư mục frontend
@@ -169,11 +98,14 @@ cp .env.example .env.local
 # Thay YOUR_VPS_IP bằng địa chỉ IP của VPS
 sed -i "s|NEXT_PUBLIC_API_URL=http://localhost:5000|NEXT_PUBLIC_API_URL=http://YOUR_VPS_IP:5000|" .env.local
 
+# Hoặc chỉnh sửa thủ công file .env.local
+# NEXT_PUBLIC_API_URL=http://YOUR_VPS_IP:5000
+
 # Build frontend
 npm run build
 ```
 
-## 7. Cấu hình PM2
+## 5. Cấu hình PM2
 
 Tạo tệp `ecosystem.config.js` trong thư mục gốc:
 
@@ -210,7 +142,7 @@ module.exports = {
 };
 ```
 
-## 8. Khởi động ứng dụng
+## 6. Khởi động ứng dụng
 
 ```bash
 # Di chuyển về thư mục gốc
@@ -224,7 +156,7 @@ pm2 save
 pm2 startup
 ```
 
-## 9. Cấu hình Nginx (tùy chọn)
+## 7. Cấu hình Nginx (tùy chọn)
 
 ```bash
 # Cài đặt Nginx
@@ -278,7 +210,7 @@ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 sudo certbot --nginx -d api.yourdomain.com
 ```
 
-## 10. Mở cổng trên tường lửa
+## 8. Mở cổng trên tường lửa
 
 ```bash
 sudo ufw allow 80/tcp
@@ -304,7 +236,101 @@ pm2 stop all
 pm2 status
 ```
 
-## Cập nhật ứng dụng
+## 10. Sao lưu và phục hồi cơ sở dữ liệu SQLite
+
+SQLite lưu trữ toàn bộ cơ sở dữ liệu trong một file duy nhất, nên việc sao lưu và phục hồi rất đơn giản.
+
+### Sao lưu cơ sở dữ liệu
+
+```bash
+# Di chuyển đến thư mục dự án
+cd videodlp
+
+# Tạo thư mục sao lưu nếu chưa có
+mkdir -p backups
+
+# Sao lưu file cơ sở dữ liệu
+cp video-downloader-saas/backend/database/videodlp.db backups/videodlp_$(date +%Y%m%d).db
+```
+
+### Phục hồi cơ sở dữ liệu
+
+```bash
+# Dừng ứng dụng
+pm2 stop all
+
+# Phục hồi từ bản sao lưu
+cp backups/videodlp_YYYYMMDD.db video-downloader-saas/backend/database/videodlp.db
+
+# Khởi động lại ứng dụng
+pm2 start all
+```
+
+## 11. Xử lý sự cố
+
+### Kiểm tra logs
+
+```bash
+# Xem logs của backend
+pm2 logs videodownloader-backend
+
+# Xem logs của frontend
+pm2 logs videodownloader-frontend
+```
+
+### Kiểm tra kết nối cơ sở dữ liệu
+
+```bash
+# Di chuyển đến thư mục backend
+cd video-downloader-saas/backend
+
+# Chạy script kiểm tra kết nối
+node -e "const { testConnection } = require('./database'); testConnection().then(() => console.log('Kết nối thành công')).catch(err => console.error('Lỗi kết nối:', err));"
+```
+
+### Khởi động lại ứng dụng
+
+```bash
+# Khởi động lại toàn bộ ứng dụng
+pm2 restart all
+
+# Hoặc khởi động lại từng phần
+pm2 restart videodownloader-backend
+pm2 restart videodownloader-frontend
+```
+
+## 12. Tối ưu hóa hiệu suất
+
+### Cấu hình Nginx cache
+
+Thêm cấu hình cache vào file Nginx:
+
+```nginx
+# Thêm vào block server của frontend
+location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+    expires 30d;
+    add_header Cache-Control "public, no-transform";
+}
+```
+
+### Tối ưu hóa SQLite
+
+SQLite hoạt động tốt cho hầu hết các trường hợp sử dụng, nhưng bạn có thể tối ưu hóa thêm:
+
+1. Thêm vào file `.env`:
+```
+SQLITE_PRAGMA_JOURNAL_MODE=WAL
+SQLITE_PRAGMA_SYNCHRONOUS=NORMAL
+```
+
+2. Cập nhật cấu hình database để sử dụng các pragma này:
+```javascript
+// Trong file database/index.js
+sequelize.query('PRAGMA journal_mode = WAL;');
+sequelize.query('PRAGMA synchronous = NORMAL;');
+```
+
+## 9. Cập nhật ứng dụng
 
 ```bash
 # Di chuyển đến thư mục repository

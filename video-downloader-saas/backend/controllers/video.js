@@ -83,13 +83,13 @@ exports.streamVideo = catchAsync(async (req, res, next) => {
     
     // Tìm thông tin video từ ID (nếu cần)
     try {
-      const video = await Video.findById(videoId);
+      const video = await Video.findByPk(videoId);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy video.' });
       }
       
       // Kiểm tra quyền truy cập
-      if (video.user && (!req.user || (video.user.toString() !== req.user.id && req.user.role !== 'admin'))) {
+      if (video.userId && (!req.user || (video.userId !== req.user.id && req.user.role !== 'admin'))) {
         return res.status(403).json({ success: false, message: 'Không có quyền truy cập video này.' });
       }
       
@@ -259,10 +259,16 @@ exports.streamVideo = catchAsync(async (req, res, next) => {
     
     // Cập nhật thống kê tải xuống (nếu cần)
     if (req.user) {
-      User.findByIdAndUpdate(req.user.id, {
-        $inc: { downloadCount: 1, dailyDownloadCount: 1 },
-        lastDownloadDate: new Date()
-      }).catch(err => console.error(`[${new Date().toISOString()}] Error updating user stats:`, err));
+      User.findByPk(req.user.id)
+        .then(user => {
+          if (user) {
+            user.downloadCount += 1;
+            user.dailyDownloadCount += 1;
+            user.lastDownloadDate = new Date();
+            return user.save();
+          }
+        })
+        .catch(err => console.error(`[${new Date().toISOString()}] Error updating user stats:`, err));
     }
     
     // Log thông tin tải xuống cho mục đích thống kê

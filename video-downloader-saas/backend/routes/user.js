@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
+const { Op } = require('sequelize');
 
 const router = express.Router();
 
@@ -14,12 +15,19 @@ router.use(protect);
  */
 router.get('/profile', async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findByPk(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
     
     res.status(200).json({
       success: true,
       data: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -48,7 +56,12 @@ router.put('/profile', async (req, res) => {
     
     // Kiểm tra email đã tồn tại chưa (nếu thay đổi)
     if (email) {
-      const existingUser = await User.findOne({ email, _id: { $ne: req.user.id } });
+      const existingUser = await User.findOne({
+        where: {
+          email,
+          id: { [Op.ne]: req.user.id }
+        }
+      });
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -62,15 +75,24 @@ router.put('/profile', async (req, res) => {
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     
-    const user = await User.findByIdAndUpdate(req.user.id, updateData, {
-      new: true,
-      runValidators: true
-    });
+    const user = await User.findByPk(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+    
+    // Cập nhật thông tin
+    if (name) user.name = name;
+    if (email) user.email = email;
+    await user.save();
     
     res.status(200).json({
       success: true,
       data: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -95,7 +117,7 @@ router.put('/profile', async (req, res) => {
  */
 router.get('/', authorize('admin'), async (req, res) => {
   try {
-    const users = await User.find();
+    const users = await User.findAll();
     
     res.status(200).json({
       success: true,
@@ -118,7 +140,14 @@ router.get('/', authorize('admin'), async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findByPk(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
     
     // Kiểm tra và reset lượt tải xuống hàng ngày nếu cần
     const today = new Date();

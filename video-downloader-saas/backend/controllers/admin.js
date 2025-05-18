@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const Video = require('../models/Video');
-const mongoose = require('mongoose');
+const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 
@@ -14,19 +14,18 @@ exports.getUsers = async (req, res, next) => {
     // Phân trang
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
-    const startIndex = (page - 1) * limit;
+    const offset = (page - 1) * limit;
     
     // Tìm kiếm
     const search = req.query.search || '';
-    const searchRegex = new RegExp(search, 'i');
     
     // Sắp xếp
-    const sort = {};
+    const order = [];
     if (req.query.sortBy) {
       const parts = req.query.sortBy.split(':');
-      sort[parts[0]] = parts[1] === 'desc' ? -1 : 1;
+      order.push([parts[0], parts[1] === 'desc' ? 'DESC' : 'ASC']);
     } else {
-      sort.createdAt = -1; // Mặc định sắp xếp theo thời gian tạo giảm dần
+      order.push(['createdAt', 'DESC']); // Mặc định sắp xếp theo thời gian tạo giảm dần
     }
     
     // Lọc theo vai trò
@@ -38,32 +37,33 @@ exports.getUsers = async (req, res, next) => {
     const subscriptionFilter = subscription ? { subscription } : {};
     
     // Tạo query
-    const query = {
-      $and: [
-        { $or: [
-          { name: searchRegex },
-          { email: searchRegex }
-        ]},
+    const whereClause = {
+      [Op.and]: [
+        {
+          [Op.or]: [
+            { name: { [Op.like]: `%${search}%` } },
+            { email: { [Op.like]: `%${search}%` } }
+          ]
+        },
         roleFilter,
         subscriptionFilter
       ]
     };
     
     // Thực hiện query
-    const users = await User.find(query)
-      .sort(sort)
-      .skip(startIndex)
-      .limit(limit);
-    
-    // Đếm tổng số người dùng
-    const total = await User.countDocuments(query);
+    const { count, rows: users } = await User.findAndCountAll({
+      where: whereClause,
+      order,
+      offset,
+      limit
+    });
     
     // Tính toán thông tin phân trang
     const pagination = {
       page,
       limit,
-      total,
-      pages: Math.ceil(total / limit)
+      total: count,
+      pages: Math.ceil(count / limit)
     };
     
     res.status(200).json({
@@ -84,7 +84,7 @@ exports.getUsers = async (req, res, next) => {
  */
 exports.getUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findByPk(req.params.id);
     
     if (!user) {
       return res.status(404).json({
@@ -120,11 +120,7 @@ exports.updateUser = async (req, res, next) => {
       }
     });
     
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const user = await User.findByPk(req.params.id);
     
     if (!user) {
       return res.status(404).json({
@@ -132,6 +128,9 @@ exports.updateUser = async (req, res, next) => {
         message: 'Không tìm thấy người dùng'
       });
     }
+    
+    // Cập nhật thông tin người dùng
+    await user.update(updateData);
     
     res.status(200).json({
       success: true,
@@ -158,7 +157,7 @@ exports.deleteUser = async (req, res, next) => {
       });
     }
     
-    const user = await User.findById(req.params.id);
+    const user = await User.findByPk(req.params.id);
     
     if (!user) {
       return res.status(404).json({
@@ -168,7 +167,7 @@ exports.deleteUser = async (req, res, next) => {
     }
     
     // Xóa tất cả video của người dùng
-    const videos = await Video.find({ user: req.params.id });
+    const videos = await Video.findAll({ where: { userId: req.params.id } });
     
     for (const video of videos) {
       // Xóa file nếu tồn tại
@@ -176,11 +175,11 @@ exports.deleteUser = async (req, res, next) => {
         fs.unlinkSync(video.downloadPath);
       }
       
-      await video.deleteOne();
+      await video.destroy();
     }
     
     // Xóa người dùng
-    await user.deleteOne();
+    await user.destroy();
     
     res.status(200).json({
       success: true,
@@ -202,19 +201,18 @@ exports.getVideos = async (req, res, next) => {
     // Phân trang
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
-    const startIndex = (page - 1) * limit;
+    const offset = (page - 1) * limit;
     
     // Tìm kiếm
     const search = req.query.search || '';
-    const searchRegex = new RegExp(search, 'i');
     
     // Sắp xếp
-    const sort = {};
+    const order = [];
     if (req.query.sortBy) {
       const parts = req.query.sortBy.split(':');
-      sort[parts[0]] = parts[1] === 'desc' ? -1 : 1;
+      order.push([parts[0], parts[1] === 'desc' ? 'DESC' : 'ASC']);
     } else {
-      sort.createdAt = -1; // Mặc định sắp xếp theo thời gian tạo giảm dần
+      order.push(['createdAt', 'DESC']); // Mặc định sắp xếp theo thời gian tạo giảm dần
     }
     
     // Lọc theo trạng thái
@@ -223,33 +221,38 @@ exports.getVideos = async (req, res, next) => {
     
     // Lọc theo người dùng
     const userId = req.query.userId || '';
-    const userFilter = userId ? { user: userId } : {};
+    const userFilter = userId ? { userId } : {};
     
     // Tạo query
-    const query = {
-      $and: [
-        { title: searchRegex },
+    const whereClause = {
+      [Op.and]: [
+        { title: { [Op.like]: `%${search}%` } },
         statusFilter,
         userFilter
       ]
     };
     
     // Thực hiện query
-    const videos = await Video.find(query)
-      .populate('user', 'name email')
-      .sort(sort)
-      .skip(startIndex)
-      .limit(limit);
-    
-    // Đếm tổng số video
-    const total = await Video.countDocuments(query);
+    const { count, rows: videos } = await Video.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['name', 'email']
+        }
+      ],
+      order,
+      offset,
+      limit
+    });
     
     // Tính toán thông tin phân trang
     const pagination = {
       page,
       limit,
-      total,
-      pages: Math.ceil(total / limit)
+      total: count,
+      pages: Math.ceil(count / limit)
     };
     
     res.status(200).json({
@@ -270,7 +273,7 @@ exports.getVideos = async (req, res, next) => {
  */
 exports.deleteVideo = async (req, res, next) => {
   try {
-    const video = await Video.findById(req.params.id);
+    const video = await Video.findByPk(req.params.id);
     
     if (!video) {
       return res.status(404).json({
@@ -284,7 +287,7 @@ exports.deleteVideo = async (req, res, next) => {
       fs.unlinkSync(video.downloadPath);
     }
     
-    await video.deleteOne();
+    await video.destroy();
     
     res.status(200).json({
       success: true,
@@ -304,29 +307,37 @@ exports.deleteVideo = async (req, res, next) => {
 exports.getStats = async (req, res, next) => {
   try {
     // Tổng số người dùng
-    const totalUsers = await User.countDocuments();
+    const totalUsers = await User.count();
     
     // Số người dùng Premium
-    const premiumUsers = await User.countDocuments({ subscription: 'premium' });
+    const premiumUsers = await User.count({ where: { subscription: 'premium' } });
     
     // Số người dùng Free
-    const freeUsers = await User.countDocuments({ subscription: 'free' });
+    const freeUsers = await User.count({ where: { subscription: 'free' } });
     
     // Tổng số video
-    const totalVideos = await Video.countDocuments();
+    const totalVideos = await Video.count();
     
     // Số video theo trạng thái
-    const completedVideos = await Video.countDocuments({ status: 'completed' });
-    const failedVideos = await Video.countDocuments({ status: 'failed' });
-    const processingVideos = await Video.countDocuments({ status: 'processing' });
+    const completedVideos = await Video.count({ where: { status: 'completed' } });
+    const failedVideos = await Video.count({ where: { status: 'failed' } });
+    const processingVideos = await Video.count({ where: { status: 'processing' } });
     
     // Số người dùng mới trong 7 ngày qua
     const lastWeek = new Date();
     lastWeek.setDate(lastWeek.getDate() - 7);
-    const newUsers = await User.countDocuments({ createdAt: { $gte: lastWeek } });
+    const newUsers = await User.count({
+      where: {
+        createdAt: { [Op.gte]: lastWeek }
+      }
+    });
     
     // Số video tải trong 7 ngày qua
-    const newVideos = await Video.countDocuments({ createdAt: { $gte: lastWeek } });
+    const newVideos = await Video.count({
+      where: {
+        createdAt: { [Op.gte]: lastWeek }
+      }
+    });
     
     // Thống kê theo ngày (7 ngày gần nhất)
     const dailyStats = [];
@@ -338,12 +349,22 @@ exports.getStats = async (req, res, next) => {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
       
-      const usersCount = await User.countDocuments({
-        createdAt: { $gte: date, $lt: nextDate }
+      const usersCount = await User.count({
+        where: {
+          createdAt: {
+            [Op.gte]: date,
+            [Op.lt]: nextDate
+          }
+        }
       });
       
-      const videosCount = await Video.countDocuments({
-        createdAt: { $gte: date, $lt: nextDate }
+      const videosCount = await Video.count({
+        where: {
+          createdAt: {
+            [Op.gte]: date,
+            [Op.lt]: nextDate
+          }
+        }
       });
       
       dailyStats.push({

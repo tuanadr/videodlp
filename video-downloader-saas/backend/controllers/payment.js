@@ -10,7 +10,13 @@ const Subscription = require('../models/Subscription');
 exports.createCheckoutSession = async (req, res, next) => {
   try {
     // Lấy thông tin người dùng
-    const user = await User.findById(req.user.id);
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
 
     // Kiểm tra nếu người dùng đã có gói Premium
     if (user.subscription === 'premium') {
@@ -29,14 +35,13 @@ exports.createCheckoutSession = async (req, res, next) => {
         email: user.email,
         name: user.name,
         metadata: {
-          userId: user._id.toString()
+          userId: user.id.toString()
         }
       });
 
       // Lưu Stripe customer ID vào user
-      await User.findByIdAndUpdate(user._id, {
-        stripeCustomerId: customer.id
-      });
+      user.stripeCustomerId = customer.id;
+      await user.save();
     }
 
     // Tạo checkout session
@@ -63,7 +68,7 @@ exports.createCheckoutSession = async (req, res, next) => {
       success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
       metadata: {
-        userId: user._id.toString()
+        userId: user.id.toString()
       }
     });
 
@@ -134,7 +139,9 @@ exports.handleWebhook = async (req, res, next) => {
  */
 exports.getSubscription = async (req, res, next) => {
   try {
-    const subscription = await Subscription.findOne({ user: req.user.id });
+    const subscription = await Subscription.findOne({
+      where: { userId: req.user.id }
+    });
 
     if (!subscription) {
       return res.status(404).json({
@@ -163,7 +170,9 @@ exports.getSubscription = async (req, res, next) => {
  */
 exports.cancelSubscription = async (req, res, next) => {
   try {
-    const subscription = await Subscription.findOne({ user: req.user.id });
+    const subscription = await Subscription.findOne({
+      where: { userId: req.user.id }
+    });
 
     if (!subscription) {
       return res.status(404).json({
@@ -208,7 +217,7 @@ async function handleCheckoutSessionCompleted(session) {
     
     // Tạo bản ghi đăng ký mới
     await Subscription.create({
-      user: userId,
+      userId: userId,
       stripeSubscriptionId: subscription.id,
       stripePriceId: subscription.items.data[0].price.id,
       stripeCustomerId: session.customer,
@@ -219,9 +228,11 @@ async function handleCheckoutSessionCompleted(session) {
     });
     
     // Cập nhật trạng thái người dùng
-    await User.findByIdAndUpdate(userId, {
-      subscription: 'premium'
-    });
+    const user = await User.findByPk(userId);
+    if (user) {
+      user.subscription = 'premium';
+      await user.save();
+    }
   } catch (error) {
     console.error('Lỗi khi xử lý checkout.session.completed:', error);
   }
@@ -236,21 +247,22 @@ async function handleInvoicePaid(invoice) {
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
     
     // Cập nhật thông tin đăng ký trong cơ sở dữ liệu
-    await Subscription.findOneAndUpdate(
-      { stripeSubscriptionId: subscription.id },
-      {
-        status: subscription.status,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000)
-      }
-    );
+    const subscriptionRecord = await Subscription.findOne({
+      where: { stripeSubscriptionId: subscription.id }
+    });
     
-    // Đảm bảo người dùng có trạng thái premium
-    const subscriptionRecord = await Subscription.findOne({ stripeSubscriptionId: subscription.id });
     if (subscriptionRecord) {
-      await User.findByIdAndUpdate(subscriptionRecord.user, {
-        subscription: 'premium'
-      });
+      subscriptionRecord.status = subscription.status;
+      subscriptionRecord.currentPeriodStart = new Date(subscription.current_period_start * 1000);
+      subscriptionRecord.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+      await subscriptionRecord.save();
+      
+      // Đảm bảo người dùng có trạng thái premium
+      const user = await User.findByPk(subscriptionRecord.userId);
+      if (user) {
+        user.subscription = 'premium';
+        await user.save();
+      }
     }
   } catch (error) {
     console.error('Lỗi khi xử lý invoice.paid:', error);
@@ -266,10 +278,14 @@ async function handleInvoicePaymentFailed(invoice) {
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
     
     // Cập nhật trạng thái đăng ký trong cơ sở dữ liệu
-    await Subscription.findOneAndUpdate(
-      { stripeSubscriptionId: subscription.id },
-      { status: subscription.status }
-    );
+    const subscriptionRecord = await Subscription.findOne({
+      where: { stripeSubscriptionId: subscription.id }
+    });
+    
+    if (subscriptionRecord) {
+      subscriptionRecord.status = subscription.status;
+      await subscriptionRecord.save();
+    }
   } catch (error) {
     console.error('Lỗi khi xử lý invoice.payment_failed:', error);
   }
@@ -281,15 +297,17 @@ async function handleInvoicePaymentFailed(invoice) {
 async function handleSubscriptionUpdated(subscription) {
   try {
     // Cập nhật thông tin đăng ký trong cơ sở dữ liệu
-    await Subscription.findOneAndUpdate(
-      { stripeSubscriptionId: subscription.id },
-      {
-        status: subscription.status,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-        cancelAtPeriodEnd: subscription.cancel_at_period_end
-      }
-    );
+    const subscriptionRecord = await Subscription.findOne({
+      where: { stripeSubscriptionId: subscription.id }
+    });
+    
+    if (subscriptionRecord) {
+      subscriptionRecord.status = subscription.status;
+      subscriptionRecord.currentPeriodStart = new Date(subscription.current_period_start * 1000);
+      subscriptionRecord.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+      subscriptionRecord.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+      await subscriptionRecord.save();
+    }
   } catch (error) {
     console.error('Lỗi khi xử lý customer.subscription.updated:', error);
   }
@@ -301,19 +319,21 @@ async function handleSubscriptionUpdated(subscription) {
 async function handleSubscriptionDeleted(subscription) {
   try {
     // Tìm bản ghi đăng ký
-    const subscriptionRecord = await Subscription.findOne({ stripeSubscriptionId: subscription.id });
+    const subscriptionRecord = await Subscription.findOne({
+      where: { stripeSubscriptionId: subscription.id }
+    });
     
     if (subscriptionRecord) {
       // Cập nhật trạng thái người dùng
-      await User.findByIdAndUpdate(subscriptionRecord.user, {
-        subscription: 'free'
-      });
+      const user = await User.findByPk(subscriptionRecord.userId);
+      if (user) {
+        user.subscription = 'free';
+        await user.save();
+      }
       
-      // Cập nhật hoặc xóa bản ghi đăng ký
-      await Subscription.findOneAndUpdate(
-        { stripeSubscriptionId: subscription.id },
-        { status: 'canceled' }
-      );
+      // Cập nhật bản ghi đăng ký
+      subscriptionRecord.status = 'canceled';
+      await subscriptionRecord.save();
     }
   } catch (error) {
     console.error('Lỗi khi xử lý customer.subscription.deleted:', error);

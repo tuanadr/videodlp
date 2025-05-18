@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { Op } = require('sequelize');
 
 /**
  * @desc    Đăng ký người dùng mới
@@ -10,7 +11,7 @@ exports.register = async (req, res, next) => {
     const { name, email, password, referralCode } = req.body;
 
     // Kiểm tra xem email đã tồn tại chưa
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -29,37 +30,25 @@ exports.register = async (req, res, next) => {
     if (referralCode) {
       try {
         // Tìm người dùng có mã giới thiệu tương ứng
-        const inviter = await User.findOne({ referralCode });
+        const inviter = await User.findOne({ where: { referralCode } });
         
         if (inviter) {
           // Số lượt tải thưởng cho mỗi bên
           const bonusAmount = 5;
           
           // Cập nhật thông tin người được mời
-          user.referredBy = inviter._id;
+          user.referredBy = inviter.id;
           user.bonusDownloads += bonusAmount;
-          
-          // Cập nhật lịch sử giới thiệu của người được mời
-          user.referralHistory.push({
-            userId: inviter._id,
-            timestamp: Date.now(),
-            rewarded: true
-          });
-          
           await user.save();
           
           // Thưởng cho người mời
           inviter.bonusDownloads += bonusAmount;
           
-          // Cập nhật lịch sử và thống kê giới thiệu của người mời
-          inviter.referralHistory.push({
-            userId: user._id,
-            timestamp: Date.now(),
-            rewarded: true
-          });
-          
-          inviter.referralStats.totalReferred += 1;
-          inviter.referralStats.successfulReferrals += 1;
+          // Cập nhật thống kê giới thiệu của người mời
+          const referralStats = inviter.referralStats || { totalReferred: 0, successfulReferrals: 0 };
+          referralStats.totalReferred += 1;
+          referralStats.successfulReferrals += 1;
+          inviter.referralStats = referralStats;
           
           await inviter.save();
           
@@ -98,7 +87,7 @@ exports.login = async (req, res, next) => {
     }
 
     // Kiểm tra người dùng
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -129,7 +118,7 @@ exports.login = async (req, res, next) => {
  */
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findByPk(req.user.id);
 
     res.status(200).json({
       success: true,
@@ -152,7 +141,7 @@ exports.logout = async (req, res, next) => {
     if (refreshToken) {
       // Tìm và thu hồi refresh token cụ thể
       const RefreshToken = require('../models/RefreshToken');
-      const token = await RefreshToken.findOne({ token: refreshToken });
+      const token = await RefreshToken.findOne({ where: { token: refreshToken } });
       
       if (token) {
         await token.revoke();
@@ -215,10 +204,17 @@ exports.updateDetails = async (req, res, next) => {
       email: req.body.email
     };
 
-    const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
-      new: true,
-      runValidators: true
-    });
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+
+    user.name = fieldsToUpdate.name;
+    user.email = fieldsToUpdate.email;
+    await user.save();
 
     res.status(200).json({
       success: true,
@@ -236,7 +232,13 @@ exports.updateDetails = async (req, res, next) => {
  */
 exports.updatePassword = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).select('+password');
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
 
     // Kiểm tra mật khẩu hiện tại
     if (!(await user.matchPassword(req.body.currentPassword))) {
@@ -274,7 +276,14 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
   // Tạo refresh token
   const userAgent = req.headers['user-agent'] || 'unknown';
   const ipAddress = req.ip || req.connection.remoteAddress;
-  const refreshTokenData = await user.createRefreshToken(userAgent, ipAddress);
+  
+  // Tạo refresh token
+  const RefreshToken = require('../models/RefreshToken');
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7); // 7 ngày
+  
+  const refreshToken = user.getRefreshToken();
+  const refreshTokenData = await RefreshToken.createToken(user, refreshToken, expiresAt, userAgent, ipAddress);
 
   res.status(statusCode).json({
     success: true,
@@ -282,7 +291,7 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
     refreshToken: refreshTokenData.token,
     refreshTokenExpires: refreshTokenData.expiresAt,
     user: {
-      id: user._id,
+      id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,

@@ -96,7 +96,11 @@ const processVideoDirectly = async (data) => {
     console.log(`[DIRECT_PROCESS] Processing video directly: ${videoId}`);
     
     // Cập nhật tiến trình
-    await Video.findByIdAndUpdate(videoId, { progress: 5 });
+    const videoRecord = await Video.findByPk(videoId);
+    if (videoRecord) {
+      videoRecord.progress = 5;
+      await videoRecord.save();
+    }
     
     // Xác định thư mục đầu ra
     const userDir = userId
@@ -121,25 +125,26 @@ const processVideoDirectly = async (data) => {
         : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
     
     // Cập nhật thông tin video
-    const updatedVideo = await Video.findByIdAndUpdate(
-      videoId,
-      {
-        status: 'completed',
-        downloadPath: downloadPath,
-        fileSize: stats.size,
-        fileType: finalFileType,
-        progress: 100,
-        expiresAt: finalExpiresAt
-      },
-      { new: true }
-    );
+    const videoToUpdate = await Video.findByPk(videoId);
+    if (videoToUpdate) {
+      videoToUpdate.status = 'completed';
+      videoToUpdate.downloadPath = downloadPath;
+      videoToUpdate.fileSize = stats.size;
+      videoToUpdate.fileType = finalFileType;
+      videoToUpdate.progress = 100;
+      videoToUpdate.expiresAt = finalExpiresAt;
+      await videoToUpdate.save();
+    }
     
     // Cập nhật thông tin người dùng
     if (userId) {
-      await User.findByIdAndUpdate(userId, {
-        $inc: { downloadCount: 1, dailyDownloadCount: 1 },
-        lastDownloadDate: new Date()
-      });
+      const user = await User.findByPk(userId);
+      if (user) {
+        user.downloadCount += 1;
+        user.dailyDownloadCount += 1;
+        user.lastDownloadDate = new Date();
+        await user.save();
+      }
     }
     
     // Thiết lập xóa file tạm thời cho anonymous
@@ -170,11 +175,13 @@ const processVideoDirectly = async (data) => {
     console.error(`[DIRECT_PROCESS] Error processing video ${videoId}:`, error);
     
     // Cập nhật trạng thái video thành thất bại
-    await Video.findByIdAndUpdate(videoId, {
-      status: 'failed',
-      progress: 0,
-      error: error.message.substring(0, 200)
-    });
+    const failedVideo = await Video.findByPk(videoId);
+    if (failedVideo) {
+      failedVideo.status = 'failed';
+      failedVideo.progress = 0;
+      failedVideo.error = error.message.substring(0, 200);
+      await failedVideo.save();
+    }
     
     throw error;
   }
@@ -186,7 +193,11 @@ const processVideoJob = async (job) => {
   
   try {
     // Cập nhật tiến trình
-    await Video.findByIdAndUpdate(videoId, { progress: 5 });
+    const jobVideo = await Video.findByPk(videoId);
+    if (jobVideo) {
+      jobVideo.progress = 5;
+      await jobVideo.save();
+    }
     job.progress(5);
     
     // Xác định thư mục đầu ra
@@ -215,25 +226,26 @@ const processVideoJob = async (job) => {
         : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
     
     // Cập nhật thông tin video
-    const updatedVideo = await Video.findByIdAndUpdate(
-      videoId,
-      {
-        status: 'completed',
-        downloadPath: downloadPath,
-        fileSize: stats.size,
-        fileType: finalFileType,
-        progress: 100,
-        expiresAt: finalExpiresAt
-      },
-      { new: true }
-    );
+    const completedVideo = await Video.findByPk(videoId);
+    if (completedVideo) {
+      completedVideo.status = 'completed';
+      completedVideo.downloadPath = downloadPath;
+      completedVideo.fileSize = stats.size;
+      completedVideo.fileType = finalFileType;
+      completedVideo.progress = 100;
+      completedVideo.expiresAt = finalExpiresAt;
+      await completedVideo.save();
+    }
     
     // Cập nhật thông tin người dùng
     if (userId) {
-      await User.findByIdAndUpdate(userId, {
-        $inc: { downloadCount: 1, dailyDownloadCount: 1 },
-        lastDownloadDate: new Date()
-      });
+      const user = await User.findByPk(userId);
+      if (user) {
+        user.downloadCount += 1;
+        user.dailyDownloadCount += 1;
+        user.lastDownloadDate = new Date();
+        await user.save();
+      }
     }
     
     job.progress(100);
@@ -249,11 +261,13 @@ const processVideoJob = async (job) => {
     console.error(`[QUEUE] Error processing job ${job.id}:`, error);
     
     // Cập nhật trạng thái video thành thất bại
-    await Video.findByIdAndUpdate(videoId, {
-      status: 'failed',
-      progress: 0,
-      error: error.message.substring(0, 200)
-    });
+    const errorVideo = await Video.findByPk(videoId);
+    if (errorVideo) {
+      errorVideo.status = 'failed';
+      errorVideo.progress = 0;
+      errorVideo.error = error.message.substring(0, 200);
+      await errorVideo.save();
+    }
     
     throw error;
   }
@@ -369,7 +383,7 @@ const addVideoJob = async (jobData) => {
     
     // Xác định loại người dùng
     const userType = userId
-      ? await User.findById(userId).then(user => user.subscription)
+      ? await User.findByPk(userId).then(user => user ? user.subscription : 'free')
       : 'anonymous';
     
     // Chọn hàng đợi dựa trên loại người dùng

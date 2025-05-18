@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
+const { Op } = require('sequelize');
 
 /**
  * @desc    Áp dụng mã giới thiệu
@@ -20,14 +21,14 @@ exports.applyReferral = async (req, res, next) => {
     }
     
     // Tìm người dùng có mã giới thiệu tương ứng
-    const inviter = await User.findOne({ referralCode });
+    const inviter = await User.findOne({ where: { referralCode } });
     
     if (!inviter) {
       return next(new ErrorResponse('Mã giới thiệu không hợp lệ', 404));
     }
     
     // Không cho phép tự giới thiệu
-    if (inviter._id.toString() === req.user._id.toString()) {
+    if (inviter.id === req.user.id) {
       return next(new ErrorResponse('Bạn không thể sử dụng mã giới thiệu của chính mình', 400));
     }
     
@@ -35,30 +36,18 @@ exports.applyReferral = async (req, res, next) => {
     const bonusAmount = 5;
     
     // Cập nhật thông tin người được mời
-    req.user.referredBy = inviter._id;
+    req.user.referredBy = inviter.id;
     req.user.addBonusDownloads(bonusAmount);
-    
-    // Cập nhật lịch sử giới thiệu của người được mời
-    req.user.referralHistory.push({
-      userId: inviter._id,
-      timestamp: Date.now(),
-      rewarded: true
-    });
-    
     await req.user.save();
     
     // Thưởng cho người mời
     inviter.addBonusDownloads(bonusAmount);
     
-    // Cập nhật lịch sử và thống kê giới thiệu của người mời
-    inviter.referralHistory.push({
-      userId: req.user._id,
-      timestamp: Date.now(),
-      rewarded: true
-    });
-    
-    inviter.referralStats.totalReferred += 1;
-    inviter.referralStats.successfulReferrals += 1;
+    // Cập nhật thống kê giới thiệu của người mời
+    const referralStats = inviter.referralStats || { totalReferred: 0, successfulReferrals: 0 };
+    referralStats.totalReferred += 1;
+    referralStats.successfulReferrals += 1;
+    inviter.referralStats = referralStats;
     
     await inviter.save();
     
@@ -82,9 +71,11 @@ exports.applyReferral = async (req, res, next) => {
 exports.getReferralStats = async (req, res, next) => {
   try {
     // Lấy danh sách người dùng đã được giới thiệu
-    const referredUsers = await User.find({ referredBy: req.user._id })
-      .select('name email createdAt')
-      .sort('-createdAt');
+    const referredUsers = await User.findAll({
+      where: { referredBy: req.user.id },
+      attributes: ['id', 'name', 'email', 'createdAt'],
+      order: [['createdAt', 'DESC']]
+    });
     
     res.status(200).json({
       success: true,

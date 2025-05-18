@@ -272,7 +272,7 @@ class VideoService {
       formatId: formatId,
       status: 'pending',
       progress: 0,
-      user: userType === 'anonymous' ? null : userId,
+      userId: userType === 'anonymous' ? null : userId,
       isTemporary: userType === 'anonymous'
     });
     
@@ -286,7 +286,7 @@ class VideoService {
       url,
       formatId,
       userId,
-      videoId: video._id,
+      videoId: video.id,
       qualityKey: qualityKey || selectedFormatDetails.qualityKey,
       settings
     });
@@ -294,7 +294,7 @@ class VideoService {
     // Không cần thiết lập xóa file vì đã chuyển sang streaming
 
     return {
-      videoId: video._id,
+      videoId: video.id,
       jobId: jobResult.jobId || null,
       processingMode: jobResult.queued ? 'queue' : 'direct'
     };
@@ -307,18 +307,18 @@ class VideoService {
    * @returns {Promise<Object>} - Trạng thái của video
    */
   async getVideoStatus(videoId, user) {
-    const video = await Video.findById(videoId);
+    const video = await Video.findByPk(videoId);
 
     if (!video) {
       throw new AppError('Không tìm thấy video', 404);
     }
     
-    if (video.user && (!user || (video.user.toString() !== user.id && user.role !== 'admin'))) {
+    if (video.userId && (!user || (video.userId !== user.id && user.role !== 'admin'))) {
       throw new AppError('Không có quyền truy cập trạng thái video này', 403);
     }
 
     return {
-      id: video._id,
+      id: video.id,
       status: video.status,
       title: video.title,
       url: video.url,
@@ -326,7 +326,7 @@ class VideoService {
       createdAt: video.createdAt,
       expiresAt: video.expiresAt,
       error: video.error,
-      progress: video.progress 
+      progress: video.progress
     };
   }
 
@@ -339,16 +339,33 @@ class VideoService {
   async getUserVideos(user, queryParams) {
     const page = parseInt(queryParams.page, 10) || 1;
     const limit = parseInt(queryParams.limit, 10) || 10;
-    const startIndex = (page - 1) * limit;
-    const sort = queryParams.sortBy ? { [queryParams.sortBy.split(':')[0]]: queryParams.sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
-    const statusFilter = queryParams.status ? { status: queryParams.status } : {};
+    const offset = (page - 1) * limit;
     
-    const query = { user: user.id, ...statusFilter };
-    const videos = await Video.find(query).sort(sort).skip(startIndex).limit(limit);
-    const total = await Video.countDocuments(query);
+    // Xử lý sắp xếp
+    const order = [];
+    if (queryParams.sortBy) {
+      const parts = queryParams.sortBy.split(':');
+      order.push([parts[0], parts[1] === 'desc' ? 'DESC' : 'ASC']);
+    } else {
+      order.push(['createdAt', 'DESC']);
+    }
+    
+    // Xử lý lọc theo trạng thái
+    const where = { userId: user.id };
+    if (queryParams.status) {
+      where.status = queryParams.status;
+    }
+    
+    // Thực hiện truy vấn
+    const { count, rows: videos } = await Video.findAndCountAll({
+      where,
+      order,
+      offset,
+      limit
+    });
 
     return {
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      pagination: { page, limit, total: count, pages: Math.ceil(count / limit) },
       data: videos
     };
   }
@@ -360,18 +377,18 @@ class VideoService {
    * @returns {Promise<void>}
    */
   async deleteVideo(videoId, user) {
-    const video = await Video.findById(videoId);
+    const video = await Video.findByPk(videoId);
 
     if (!video) {
       throw new AppError('Không tìm thấy video', 404);
     }
 
-    if (user && video.user && video.user.toString() !== user.id && user.role !== 'admin') {
+    if (user && video.userId && video.userId !== user.id && user.role !== 'admin') {
       throw new AppError('Không có quyền xóa video này', 403);
     }
 
     // Không cần xóa file vì đã chuyển sang streaming
-    await video.deleteOne();
+    await video.destroy();
   }
 
   /**
