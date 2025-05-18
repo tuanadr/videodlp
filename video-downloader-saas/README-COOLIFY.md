@@ -76,6 +76,20 @@ Nếu bạn gặp lỗi ESLint trong quá trình build, hãy kiểm tra:
 
 2. File `.eslintrc.js` đã được cấu hình đúng
 
+### Lỗi "Invalid Host header"
+
+Nếu bạn gặp lỗi "Invalid Host header" khi truy cập frontend, hãy kiểm tra:
+
+1. File `.env.production` và `.env.coolify` có các biến môi trường:
+   ```
+   HOST=0.0.0.0
+   WDS_SOCKET_HOST=0.0.0.0
+   WDS_SOCKET_PORT=0
+   DANGEROUSLY_DISABLE_HOST_CHECK=true
+   ```
+
+2. Dockerfile của frontend đã được cấu hình đúng với các biến môi trường tương tự
+
 ### Vấn đề về đường dẫn
 
 Nếu bạn gặp lỗi liên quan đến đường dẫn, hãy kiểm tra:

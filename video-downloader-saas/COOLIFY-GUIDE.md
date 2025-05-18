@@ -61,7 +61,36 @@ Script này sẽ:
    ENV CI=false
    ```
 
-### 3. Cập nhật các biến môi trường
+### 3. Xử lý lỗi "Invalid Host header"
+
+Để tránh lỗi "Invalid Host header" khi truy cập frontend, chúng ta đã thêm các cấu hình sau:
+
+1. File `.env.production` và `.env.coolify` trong thư mục frontend với các biến môi trường:
+   ```
+   HOST=0.0.0.0
+   WDS_SOCKET_HOST=0.0.0.0
+   WDS_SOCKET_PORT=0
+   DANGEROUSLY_DISABLE_HOST_CHECK=true
+   ```
+
+2. Cập nhật Dockerfile của frontend để đặt các biến môi trường trong quá trình build:
+   ```dockerfile
+   ENV HOST=0.0.0.0
+   ENV WDS_SOCKET_HOST=0.0.0.0
+   ENV WDS_SOCKET_PORT=0
+   ENV DANGEROUSLY_DISABLE_HOST_CHECK=true
+   ```
+
+3. Cập nhật docker-compose.yml để thêm các biến môi trường cho service frontend:
+   ```yaml
+   environment:
+     - HOST=0.0.0.0
+     - WDS_SOCKET_HOST=0.0.0.0
+     - WDS_SOCKET_PORT=0
+     - DANGEROUSLY_DISABLE_HOST_CHECK=true
+   ```
+
+### 4. Cập nhật các biến môi trường
 
 Sau khi chạy script chuẩn bị, bạn cần cập nhật các biến môi trường trong các file `.env.coolify`:
 
@@ -105,9 +134,15 @@ REACT_APP_STRIPE_PUBLIC_KEY=your_stripe_public_key  # Thay đổi thành khóa c
 ESLINT_NO_DEV_ERRORS=true
 DISABLE_ESLINT_PLUGIN=true
 CI=false
+
+# Vô hiệu hóa kiểm tra host header
+HOST=0.0.0.0
+WDS_SOCKET_HOST=0.0.0.0
+WDS_SOCKET_PORT=0
+DANGEROUSLY_DISABLE_HOST_CHECK=true
 ```
 
-### 4. Đẩy mã nguồn lên GitHub
+### 5. Đẩy mã nguồn lên GitHub
 
 Đảm bảo bạn đã đẩy tất cả các thay đổi lên GitHub:
 
@@ -117,7 +152,7 @@ git commit -m "Chuẩn bị triển khai trên Coolify.io"
 git push
 ```
 
-### 5. Tạo ứng dụng trên Coolify.io
+### 6. Tạo ứng dụng trên Coolify.io
 
 1. Đăng nhập vào Coolify.io
 2. Nhấp vào "Create Resource" > "Application"
@@ -126,21 +161,21 @@ git push
 5. Chọn branch (thường là `main` hoặc `master`)
 6. Coolify sẽ tự động phát hiện file `coolify.json` và cấu hình ứng dụng
 
-### 6. Cấu hình biến môi trường
+### 7. Cấu hình biến môi trường
 
 1. Trong giao diện Coolify, chọn ứng dụng của bạn
 2. Chuyển đến tab "Environment Variables"
 3. Thêm các biến môi trường từ file `.env.coolify` của backend và frontend
 4. Nhấp vào "Save" để lưu các biến môi trường
 
-### 7. Cấu hình tên miền
+### 8. Cấu hình tên miền
 
 1. Trong giao diện Coolify, chọn ứng dụng của bạn
 2. Chuyển đến tab "Domains"
 3. Thêm tên miền cho frontend và backend
 4. Cấu hình DNS của tên miền để trỏ đến địa chỉ IP của máy chủ Coolify
 
-### 8. Triển khai ứng dụng
+### 9. Triển khai ứng dụng
 
 1. Trong giao diện Coolify, chọn ứng dụng của bạn
 2. Nhấp vào "Deploy" để bắt đầu quá trình triển khai
@@ -176,6 +211,28 @@ Nếu bạn vẫn gặp lỗi ESLint trong quá trình build, hãy thử các gi
    ```
    SKIP_PREFLIGHT_CHECK=true
    ```
+
+### Lỗi "Invalid Host header"
+
+Nếu bạn gặp lỗi "Invalid Host header" khi truy cập frontend, hãy thử các giải pháp sau:
+
+1. Đảm bảo các biến môi trường đã được đặt đúng:
+   ```
+   HOST=0.0.0.0
+   WDS_SOCKET_HOST=0.0.0.0
+   WDS_SOCKET_PORT=0
+   DANGEROUSLY_DISABLE_HOST_CHECK=true
+   ```
+
+2. Kiểm tra cấu hình Nginx để đảm bảo nó đang chuyển tiếp đúng các header:
+   ```nginx
+   proxy_set_header Host $host;
+   proxy_set_header X-Real-IP $remote_addr;
+   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+   proxy_set_header X-Forwarded-Proto $scheme;
+   ```
+
+3. Nếu bạn đang sử dụng Coolify.io với tên miền tùy chỉnh, hãy đảm bảo rằng DNS đã được cấu hình đúng.
 
 ### Vấn đề về đường dẫn
 
