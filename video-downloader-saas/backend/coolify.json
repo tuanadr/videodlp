@@ -1,7 +1,7 @@
 {
   "build": {
-    "type": "nixpacks",
-    "buildPack": "node"
+    "type": "docker-compose",
+    "dockerCompose": "docker-compose.yaml"
   },
   "deploy": {
     "healthCheckPath": "/",
