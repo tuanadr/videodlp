@@ -56,12 +56,21 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`${COOLIFY_FQDN}`)"
       - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      - "traefik.http.routers.backend.entrypoints=web,websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=coolify"
 ```
 
 Các thay đổi chính:
 - Sử dụng biến môi trường `${PORT:-5000}` để cho phép Coolify inject port
 - Cập nhật healthcheck để kiểm tra đường dẫn `/` thay vì `/health.txt`
-- Thêm labels cho Traefik để định tuyến traffic đến container
+- Thêm labels cho Traefik để định tuyến traffic đến container:
+  - `traefik.enable=true`: Bật Traefik cho container này
+  - `traefik.http.routers.backend.rule=Host(...)`: Định nghĩa rule cho router
+  - `traefik.http.services.backend.loadbalancer.server.port=5000`: Chỉ định port của service
+  - `traefik.http.routers.backend.entrypoints=web,websecure`: Chỉ định entrypoints (HTTP và HTTPS)
+  - `traefik.http.routers.backend.tls=true`: Bật TLS cho router
+  - `traefik.http.routers.backend.tls.certresolver=coolify`: Sử dụng certresolver của Coolify
 
 ### 2. Cập nhật file coolify.json
 
@@ -127,6 +136,27 @@ Trong cài đặt của Application backend trên Coolify:
    - Log runtime hiển thị "Máy chủ đang chạy trên cổng XXXXX"
 
 4. Truy cập URL công khai của backend để kiểm tra xem lỗi 503 đã được khắc phục chưa.
+
+## Cập nhật labels Traefik (Nếu vẫn gặp lỗi 503)
+
+Nếu sau khi triển khai lại vẫn gặp lỗi 503, có thể cần bổ sung thêm labels cho Traefik để đảm bảo định tuyến traffic đúng cách:
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.backend.rule=Host(`${COOLIFY_FQDN}`)"
+  - "traefik.http.services.backend.loadbalancer.server.port=5000"
+  - "traefik.http.routers.backend.entrypoints=web,websecure"
+  - "traefik.http.routers.backend.tls=true"
+  - "traefik.http.routers.backend.tls.certresolver=coolify"
+```
+
+Các labels bổ sung:
+- `traefik.http.routers.backend.entrypoints=web,websecure`: Chỉ định rõ các entrypoints (HTTP và HTTPS) mà router này sẽ lắng nghe
+- `traefik.http.routers.backend.tls=true`: Bật TLS cho router này
+- `traefik.http.routers.backend.tls.certresolver=coolify`: Sử dụng certresolver của Coolify để tự động lấy và quản lý chứng chỉ SSL
+
+Sau khi cập nhật labels, commit và push thay đổi lên GitHub, sau đó triển khai lại ứng dụng trên Coolify.
 
 ## Kiểm tra và gỡ lỗi
 
