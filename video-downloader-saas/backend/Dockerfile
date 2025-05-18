@@ -12,8 +12,8 @@ RUN npm ci
 # Copy the rest of the code
 COPY . .
 
-# If TypeScript is used, build it
-RUN if [ -f "tsconfig.json" ]; then npm run build; fi
+# This project doesn't use TypeScript compilation despite having tsconfig.json
+# Main file is server.js (JavaScript)
 
 # Production stage
 FROM node:18-alpine
