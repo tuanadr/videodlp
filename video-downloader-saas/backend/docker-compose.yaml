@@ -31,3 +31,6 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`${COOLIFY_FQDN}`)"
       - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      - "traefik.http.routers.backend.entrypoints=web,websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=coolify"
