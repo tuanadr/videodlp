@@ -30,8 +30,13 @@ RUN npm run build
 # Production stage
 FROM nginx:1.23-alpine
 
-# Copy custom nginx config
+# Copy custom nginx configs
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx/coolify.conf /etc/nginx/conf.d/coolify.conf
+
+# Remove default nginx config to avoid conflicts
+RUN rm -f /etc/nginx/conf.d/default.conf && \
+    mv /etc/nginx/conf.d/coolify.conf /etc/nginx/conf.d/default.conf
 
 # Copy built files from build stage
 COPY --from=build /app/build /usr/share/nginx/html

@@ -2,7 +2,7 @@ const User = require('./User');
 const Video = require('./Video');
 const Subscription = require('./Subscription');
 const RefreshToken = require('./RefreshToken');
-const sequelize = require('../database');
+const { sequelize } = require('../database');
 
 // Thiết lập các mối quan hệ
 // User - Video: 1-n

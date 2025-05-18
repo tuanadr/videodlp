@@ -2,7 +2,7 @@ const { DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const sequelize = require('../database');
+const { sequelize } = require('../database');
 
 class User extends Model {
   // Tạo JWT access token

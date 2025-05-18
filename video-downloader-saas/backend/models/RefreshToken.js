@@ -1,5 +1,5 @@
 const { DataTypes, Model } = require('sequelize');
-const sequelize = require('../database');
+const { sequelize } = require('../database');
 
 class RefreshToken extends Model {
   // Kiểm tra token đã hết hạn chưa
