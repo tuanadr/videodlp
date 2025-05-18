@@ -19,7 +19,7 @@ RUN npm run build
 FROM node:18-alpine
 
 # Install ffmpeg and yt-dlp dependencies
-RUN apk add --no-cache ffmpeg python3 py3-pip curl
+RUN apk add --no-cache ffmpeg python3 py3-pip curl bash
 
 # Install yt-dlp
 RUN pip3 install --no-cache-dir yt-dlp
@@ -36,12 +36,23 @@ RUN npm ci --only=production
 # Copy built files from build stage
 COPY --from=build /app/dist ./dist
 
-# Create downloads directory
-RUN mkdir -p downloads
+# Copy utility scripts and configuration files
+COPY utils ./utils
+COPY .env.coolify ./.env
+
+# Create necessary directories
+RUN mkdir -p downloads logs database
+
+# Set proper permissions for Linux
+RUN chmod -R 755 downloads logs database
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV UV_THREADPOOL_SIZE=4
+
+# Create a health check file
+RUN echo "OK" > ./health.txt
 
 # Expose port
 EXPOSE 5000
