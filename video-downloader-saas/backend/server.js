@@ -5,6 +5,7 @@ const path = require('path');
 const morgan = require('morgan'); // Thêm morgan cho logging
 const compression = require('express-compression'); // Thêm compression
 const cookieParser = require('cookie-parser');
+const os = require('os');
 
 // Import security middleware
 const {
@@ -17,6 +18,23 @@ const {
 
 // Import error handling middleware
 const { errorHandler } = require('./utils/errorHandler');
+
+// Import path utilities
+const {
+  setupDirectories,
+  getDownloadsDir,
+  normalizePath
+} = require('./utils/pathUtils');
+
+// Tối ưu hóa cho Linux
+if (os.platform() === 'linux') {
+  // Thiết lập kích thước thread pool cho Node.js
+  process.env.UV_THREADPOOL_SIZE = Math.max(4, os.cpus().length);
+  console.log(`Đã thiết lập UV_THREADPOOL_SIZE=${process.env.UV_THREADPOOL_SIZE}`);
+}
+
+// Thiết lập các thư mục cần thiết
+setupDirectories();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -95,10 +113,12 @@ app.use((req, res, next) => {
 });
 
 // Thư mục lưu trữ video tạm thời
-app.use('/downloads', express.static(path.join(__dirname, 'downloads'), {
+const downloadsPath = normalizePath(getDownloadsDir());
+app.use('/downloads', express.static(downloadsPath, {
   maxAge: '1d', // Cache tĩnh trong 1 ngày
   etag: true
 }));
+console.log(`Đã cấu hình thư mục tĩnh cho downloads: ${downloadsPath}`);
 
 // CSRF protection (chỉ áp dụng cho các routes không phải API)
 if (process.env.NODE_ENV === 'production') {
@@ -156,25 +176,27 @@ const { cleanupExpiredTokens } = require('./middleware/auth');
 setInterval(cleanupExpiredTokens, 24 * 60 * 60 * 1000);
 
 // Import database và models
-const { sequelize } = require('./models');
+const { sequelize, initDatabase } = require('./database');
+const { sequelize: modelsSequelize } = require('./models');
 
 // Khởi động máy chủ
 const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
-    // Kiểm tra kết nối đến SQLite
-    await sequelize.authenticate();
-    console.log('Kết nối SQLite thành công');
+    // Khởi tạo và tối ưu hóa database
+    await initDatabase();
     
     // Đồng bộ hóa các models với cơ sở dữ liệu
     if (process.env.USE_SQLITE === 'true') {
-      await sequelize.sync({ alter: true });
+      await modelsSequelize.sync({ alter: true });
       console.log('Đồng bộ hóa cơ sở dữ liệu SQLite thành công');
     }
     
     // Khởi động máy chủ
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
+      console.log(`Môi trường: ${process.env.NODE_ENV}`);
+      console.log(`Hệ điều hành: ${os.platform()} ${os.release()}`);
     });
   } catch (error) {
     console.error('Lỗi khởi động máy chủ:', error);
