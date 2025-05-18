@@ -1,8 +1,7 @@
 {
   "build": {
-    "type": "dockerfile",
-    "dockerfile": "Dockerfile",
-    "buildArgs": {}
+    "type": "nixpacks",
+    "buildPack": "node"
   },
   "deploy": {
     "healthCheckPath": "/",
@@ -10,6 +9,7 @@
     "healthCheckInterval": 30,
     "healthCheckRetries": 3,
     "exposePort": true,
+    "port": null,
     "command": "node server.js",
     "environment": {
       "NODE_ENV": "production",
