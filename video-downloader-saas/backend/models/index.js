@@ -18,7 +18,7 @@ Video.belongsTo(User, {
 // User - Subscription: 1-1
 User.hasOne(Subscription, {
   foreignKey: 'userId',
-  as: 'subscription'
+  as: 'subscriptionDetails'
 });
 Subscription.belongsTo(User, {
   foreignKey: 'userId',
