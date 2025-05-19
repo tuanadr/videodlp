@@ -322,12 +322,12 @@ const initializeRedisQueues = async () => {
     console.log('[QUEUE] Successfully connected to Redis');
     redisAvailable = true;
     
-    // Khởi tạo giám sát tải hệ thống
-    updateSystemLoad();
+    // Khởi tạo giám sát tải hệ thống và gọi lần đầu
+    updateSystemLoadInfo();
     
     return true;
   } catch (error) {
-    console.error(`[QUEUE] Redis connection failed: ${error.message}`);
+    console.error(`[QUEUE_ERROR] Redis connection failed during initializeRedisQueues: ${error.message}`, error);
     console.log('[QUEUE] Switching to direct processing mode');
     
     // Đóng các kết nối nếu đã tạo

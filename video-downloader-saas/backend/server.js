@@ -93,9 +93,16 @@ console.log(`Đã cấu hình thư mục tĩnh cho downloads: ${downloadsPath}`)
 
 // CSRF protection (chỉ áp dụng cho các routes không phải API)
 if (process.env.NODE_ENV === 'production') {
-  app.use('/api', configureCsrf());
-  app.use('/api', handleCsrfError);
-  app.use('/api', setCsrfToken);
+  const csrfMiddleware = configureCsrf();
+  app.use('/api', (req, res, next) => {
+    // Bỏ qua CSRF cho các route xác thực và các route GET/HEAD/OPTIONS
+    if (req.path.startsWith('/auth/') || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      return next();
+    }
+    csrfMiddleware(req, res, next);
+  });
+  app.use('/api', handleCsrfError); // Xử lý lỗi CSRF sau khi middleware CSRF chạy
+  app.use('/api', setCsrfToken);    // Gửi token CSRF cho client
 }
 
 // Middleware để log các yêu cầu API
