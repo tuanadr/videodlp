@@ -179,6 +179,43 @@ setInterval(cleanupExpiredTokens, 24 * 60 * 60 * 1000);
 const { sequelize, initDatabase } = require('./database');
 const { sequelize: modelsSequelize } = require('./models');
 
+// Khởi tạo Redis nếu được cấu hình
+let redisClient = null;
+if (process.env.REDIS_HOST) {
+  const { createClient } = require('redis');
+  
+  // Tạo URL kết nối Redis
+  const redisUrl = process.env.REDIS_PASSWORD
+    ? `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
+    : `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`;
+  
+  // Khởi tạo Redis client
+  redisClient = createClient({
+    url: redisUrl
+  });
+  
+  // Xử lý sự kiện kết nối Redis
+  redisClient.on('connect', () => {
+    console.log('Đã kết nối đến Redis');
+  });
+  
+  redisClient.on('error', (err) => {
+    console.error('Lỗi kết nối Redis:', err);
+  });
+  
+  // Kết nối đến Redis
+  (async () => {
+    try {
+      await redisClient.connect();
+    } catch (error) {
+      console.error('Không thể kết nối đến Redis:', error);
+    }
+  })();
+  
+  // Xuất Redis client để các module khác có thể sử dụng
+  global.redisClient = redisClient;
+}
+
 // Khởi động máy chủ
 const PORT = process.env.PORT || 5000;
 const startServer = async () => {
@@ -190,6 +227,15 @@ const startServer = async () => {
     if (process.env.USE_SQLITE === 'true') {
       await modelsSequelize.sync({ alter: true });
       console.log('Đồng bộ hóa cơ sở dữ liệu SQLite thành công');
+    } else {
+      // Đối với PostgreSQL, chỉ đồng bộ hóa trong môi trường phát triển
+      // hoặc khi có biến môi trường SYNC_DATABASE=true
+      if (process.env.NODE_ENV === 'development' || process.env.SYNC_DATABASE === 'true') {
+        await modelsSequelize.sync({ alter: true });
+        console.log('Đồng bộ hóa cơ sở dữ liệu PostgreSQL thành công');
+      } else {
+        console.log('Bỏ qua đồng bộ hóa cơ sở dữ liệu trong môi trường production');
+      }
     }
     
     // Khởi động máy chủ
@@ -197,6 +243,8 @@ const startServer = async () => {
       console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
       console.log(`Môi trường: ${process.env.NODE_ENV}`);
       console.log(`Hệ điều hành: ${os.platform()} ${os.release()}`);
+      console.log(`Database: ${process.env.USE_SQLITE === 'true' ? 'SQLite' : 'PostgreSQL'}`);
+      console.log(`Redis: ${redisClient ? 'Đã kết nối' : 'Không sử dụng'}`);
     });
   } catch (error) {
     console.error('Lỗi khởi động máy chủ:', error);

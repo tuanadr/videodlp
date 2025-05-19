@@ -7,43 +7,84 @@ require('dotenv').config();
 // Import module tiện ích xử lý đường dẫn
 const { normalizePath, ensureDirectoryExists, getDatabaseDir } = require('./utils/pathUtils');
 
-// Đảm bảo thư mục database tồn tại
-ensureDirectoryExists(getDatabaseDir());
+// Đảm bảo thư mục database tồn tại nếu sử dụng SQLite
+if (process.env.USE_SQLITE === 'true') {
+  ensureDirectoryExists(getDatabaseDir());
+}
 
-// Chuẩn hóa đường dẫn đến file SQLite
-const dbPath = normalizePath(process.env.SQLITE_PATH || path.join(getDatabaseDir(), 'videodlp.db'));
+// Chuẩn hóa đường dẫn đến file SQLite nếu sử dụng SQLite
+const dbPath = process.env.USE_SQLITE === 'true'
+  ? normalizePath(process.env.SQLITE_PATH || path.join(getDatabaseDir(), 'videodlp.db'))
+  : null;
 
-// Khởi tạo Sequelize với SQLite
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: dbPath,
-  logging: process.env.NODE_ENV === 'development' ? console.log : false
-});
+// Khởi tạo Sequelize với SQLite hoặc PostgreSQL dựa trên biến môi trường
+let sequelize;
 
-// Tối ưu hóa SQLite cho Linux
+if (process.env.USE_SQLITE === 'true') {
+  // Sử dụng SQLite
+  sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: dbPath,
+    logging: process.env.NODE_ENV === 'development' ? console.log : false
+  });
+  console.log('Đã cấu hình Sequelize với SQLite');
+} else {
+  // Sử dụng PostgreSQL
+  sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
+    {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT || 5432,
+      dialect: 'postgres',
+      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      dialectOptions: {
+        ssl: process.env.DB_SSL === 'true' ? {
+          require: true,
+          rejectUnauthorized: false
+        } : false
+      },
+      pool: {
+        max: 10,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      }
+    }
+  );
+  console.log('Đã cấu hình Sequelize với PostgreSQL');
+}
+
+// Khởi tạo và tối ưu hóa database
 const initDatabase = async () => {
   try {
     // Kiểm tra kết nối
     await sequelize.authenticate();
-    console.log('Kết nối SQLite thành công');
+    console.log('Kết nối database thành công');
     
-    // Thiết lập WAL mode để tối ưu hiệu suất trên Linux
-    const journalMode = process.env.SQLITE_PRAGMA_JOURNAL_MODE || 'WAL';
-    const synchronous = process.env.SQLITE_PRAGMA_SYNCHRONOUS || 'NORMAL';
-    
-    await sequelize.query(`PRAGMA journal_mode = ${journalMode};`);
-    await sequelize.query(`PRAGMA synchronous = ${synchronous};`);
-    
-    console.log(`SQLite đã được cấu hình với journal_mode=${journalMode}, synchronous=${synchronous}`);
-    
-    // Thiết lập quyền truy cập nếu đang chạy trên Linux
-    if (os.platform() === 'linux') {
-      try {
-        fs.chmodSync(dbPath, 0o644); // rw-r--r--
-        console.log(`Đã thiết lập quyền truy cập cho file database: ${dbPath}`);
-      } catch (error) {
-        console.error('Lỗi khi thiết lập quyền truy cập cho database:', error);
+    // Tối ưu hóa SQLite nếu đang sử dụng
+    if (process.env.USE_SQLITE === 'true') {
+      // Thiết lập WAL mode để tối ưu hiệu suất trên Linux
+      const journalMode = process.env.SQLITE_PRAGMA_JOURNAL_MODE || 'WAL';
+      const synchronous = process.env.SQLITE_PRAGMA_SYNCHRONOUS || 'NORMAL';
+      
+      await sequelize.query(`PRAGMA journal_mode = ${journalMode};`);
+      await sequelize.query(`PRAGMA synchronous = ${synchronous};`);
+      
+      console.log(`SQLite đã được cấu hình với journal_mode=${journalMode}, synchronous=${synchronous}`);
+      
+      // Thiết lập quyền truy cập nếu đang chạy trên Linux
+      if (os.platform() === 'linux') {
+        try {
+          fs.chmodSync(dbPath, 0o644); // rw-r--r--
+          console.log(`Đã thiết lập quyền truy cập cho file database: ${dbPath}`);
+        } catch (error) {
+          console.error('Lỗi khi thiết lập quyền truy cập cho database:', error);
+        }
       }
+    } else {
+      console.log('Đã kết nối đến PostgreSQL database');
     }
     
     return true;
