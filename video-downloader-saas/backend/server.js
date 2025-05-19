@@ -181,73 +181,127 @@ const { sequelize: modelsSequelize } = require('./models');
 
 // Khởi tạo Redis nếu được cấu hình
 let redisClient = null;
+let redisConnected = false;
+
+// Thêm route health check rõ ràng
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// Thử kết nối Redis nếu được cấu hình, nhưng không làm ứng dụng crash nếu không thể kết nối
 if (process.env.REDIS_HOST) {
-  const { createClient } = require('redis');
-  
-  // Tạo URL kết nối Redis
-  const redisUrl = process.env.REDIS_PASSWORD
-    ? `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
-    : `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`;
-  
-  // Khởi tạo Redis client
-  redisClient = createClient({
-    url: redisUrl
-  });
-  
-  // Xử lý sự kiện kết nối Redis
-  redisClient.on('connect', () => {
-    console.log('Đã kết nối đến Redis');
-  });
-  
-  redisClient.on('error', (err) => {
-    console.error('Lỗi kết nối Redis:', err);
-  });
-  
-  // Kết nối đến Redis
-  (async () => {
-    try {
-      await redisClient.connect();
-    } catch (error) {
-      console.error('Không thể kết nối đến Redis:', error);
-    }
-  })();
-  
-  // Xuất Redis client để các module khác có thể sử dụng
-  global.redisClient = redisClient;
+  try {
+    const { createClient } = require('redis');
+    
+    // Tạo URL kết nối Redis
+    const redisUrl = process.env.REDIS_PASSWORD
+      ? `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
+      : `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`;
+    
+    console.log(`Đang thử kết nối đến Redis tại: ${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`);
+    
+    // Khởi tạo Redis client
+    redisClient = createClient({
+      url: redisUrl,
+      socket: {
+        connectTimeout: 5000, // Timeout sau 5 giây nếu không thể kết nối
+        reconnectStrategy: (retries) => {
+          if (retries > 5) {
+            console.log('Đã thử kết nối Redis 5 lần, dừng thử lại');
+            return new Error('Không thể kết nối đến Redis sau nhiều lần thử');
+          }
+          return Math.min(retries * 100, 3000); // Thử lại sau 100ms, 200ms, 300ms, ..., tối đa 3000ms
+        }
+      }
+    });
+    
+    // Xử lý sự kiện kết nối Redis
+    redisClient.on('connect', () => {
+      console.log('Đã kết nối đến Redis');
+      redisConnected = true;
+    });
+    
+    redisClient.on('error', (err) => {
+      console.error('Lỗi kết nối Redis:', err);
+      // Không làm crash ứng dụng
+    });
+    
+    // Kết nối đến Redis
+    (async () => {
+      try {
+        await redisClient.connect();
+      } catch (error) {
+        console.error('Không thể kết nối đến Redis:', error);
+        // Không làm crash ứng dụng
+      }
+    })();
+    
+    // Xuất Redis client để các module khác có thể sử dụng
+    global.redisClient = redisClient;
+  } catch (error) {
+    console.error('Lỗi khi khởi tạo Redis client:', error);
+    // Không làm crash ứng dụng
+  }
 }
 
 // Khởi động máy chủ
 const PORT = process.env.PORT || 5000;
 const startServer = async () => {
+  let dbInitialized = false;
+  
+  // Khởi tạo và tối ưu hóa database
   try {
-    // Khởi tạo và tối ưu hóa database
     await initDatabase();
-    
-    // Đồng bộ hóa các models với cơ sở dữ liệu
-    if (process.env.USE_SQLITE === 'true') {
-      await modelsSequelize.sync({ alter: true });
-      console.log('Đồng bộ hóa cơ sở dữ liệu SQLite thành công');
-    } else {
-      // Đối với PostgreSQL, chỉ đồng bộ hóa trong môi trường phát triển
-      // hoặc khi có biến môi trường SYNC_DATABASE=true
-      if (process.env.NODE_ENV === 'development' || process.env.SYNC_DATABASE === 'true') {
+    dbInitialized = true;
+    console.log('Khởi tạo cơ sở dữ liệu thành công');
+  } catch (error) {
+    console.error('Lỗi khi khởi tạo cơ sở dữ liệu:', error);
+    console.log('Tiếp tục khởi động máy chủ mặc dù có lỗi cơ sở dữ liệu');
+  }
+  
+  // Đồng bộ hóa các models với cơ sở dữ liệu
+  if (dbInitialized) {
+    try {
+      if (process.env.USE_SQLITE === 'true') {
+        // Đảm bảo thư mục database tồn tại và có quyền ghi
+        const fs = require('fs');
+        const path = require('path');
+        const dbDir = path.dirname(process.env.SQLITE_PATH || './database/videodlp.db');
+        
+        if (!fs.existsSync(dbDir)) {
+          fs.mkdirSync(dbDir, { recursive: true });
+          console.log(`Đã tạo thư mục database: ${dbDir}`);
+        }
+        
         await modelsSequelize.sync({ alter: true });
-        console.log('Đồng bộ hóa cơ sở dữ liệu PostgreSQL thành công');
+        console.log('Đồng bộ hóa cơ sở dữ liệu SQLite thành công');
       } else {
-        console.log('Bỏ qua đồng bộ hóa cơ sở dữ liệu trong môi trường production');
+        // Đối với PostgreSQL, chỉ đồng bộ hóa trong môi trường phát triển
+        // hoặc khi có biến môi trường SYNC_DATABASE=true
+        if (process.env.NODE_ENV === 'development' || process.env.SYNC_DATABASE === 'true') {
+          await modelsSequelize.sync({ alter: true });
+          console.log('Đồng bộ hóa cơ sở dữ liệu PostgreSQL thành công');
+        } else {
+          console.log('Bỏ qua đồng bộ hóa cơ sở dữ liệu trong môi trường production');
+        }
       }
+    } catch (error) {
+      console.error('Lỗi khi đồng bộ hóa models:', error);
+      console.log('Tiếp tục khởi động máy chủ mặc dù có lỗi đồng bộ hóa');
     }
-    
-    // Khởi động máy chủ
+  }
+  
+  // Khởi động máy chủ
+  try {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
       console.log(`Môi trường: ${process.env.NODE_ENV}`);
       console.log(`Hệ điều hành: ${os.platform()} ${os.release()}`);
-      console.log(`Database: ${process.env.USE_SQLITE === 'true' ? 'SQLite' : 'PostgreSQL'}`);
-      console.log(`Redis: ${redisClient ? 'Đã kết nối' : 'Không sử dụng'}`);
+      console.log(`Database: ${process.env.USE_SQLITE === 'true' ? 'SQLite' : 'PostgreSQL'} (Khởi tạo: ${dbInitialized ? 'Thành công' : 'Thất bại'})`);
+      console.log(`Redis: ${redisConnected ? 'Đã kết nối' : 'Không kết nối'}`);
     });
   } catch (error) {
-    console.error('Lỗi khởi động máy chủ:', error);
+    console.error('Lỗi khi khởi động máy chủ:', error);
     process.exit(1);
   }
 };

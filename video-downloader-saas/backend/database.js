@@ -59,6 +59,38 @@ if (process.env.USE_SQLITE === 'true') {
 // Khởi tạo và tối ưu hóa database
 const initDatabase = async () => {
   try {
+    // Đảm bảo thư mục database tồn tại nếu sử dụng SQLite
+    if (process.env.USE_SQLITE === 'true' && dbPath) {
+      const dbDir = path.dirname(dbPath);
+      try {
+        if (!fs.existsSync(dbDir)) {
+          fs.mkdirSync(dbDir, { recursive: true });
+          console.log(`Đã tạo thư mục database: ${dbDir}`);
+        }
+        
+        // Kiểm tra quyền ghi
+        try {
+          const testFile = path.join(dbDir, '.write-test');
+          fs.writeFileSync(testFile, 'test');
+          fs.unlinkSync(testFile);
+          console.log(`Thư mục database có quyền ghi: ${dbDir}`);
+        } catch (error) {
+          console.error(`Thư mục database không có quyền ghi: ${dbDir}`, error);
+          // Thử thiết lập quyền
+          if (os.platform() === 'linux') {
+            try {
+              fs.chmodSync(dbDir, 0o755); // rwxr-xr-x
+              console.log(`Đã thiết lập quyền truy cập cho thư mục database: ${dbDir}`);
+            } catch (chmodError) {
+              console.error('Lỗi khi thiết lập quyền truy cập cho thư mục database:', chmodError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Lỗi khi tạo thư mục database:', error);
+      }
+    }
+    
     // Kiểm tra kết nối
     await sequelize.authenticate();
     console.log('Kết nối database thành công');
@@ -69,13 +101,17 @@ const initDatabase = async () => {
       const journalMode = process.env.SQLITE_PRAGMA_JOURNAL_MODE || 'WAL';
       const synchronous = process.env.SQLITE_PRAGMA_SYNCHRONOUS || 'NORMAL';
       
-      await sequelize.query(`PRAGMA journal_mode = ${journalMode};`);
-      await sequelize.query(`PRAGMA synchronous = ${synchronous};`);
-      
-      console.log(`SQLite đã được cấu hình với journal_mode=${journalMode}, synchronous=${synchronous}`);
+      try {
+        await sequelize.query(`PRAGMA journal_mode = ${journalMode};`);
+        await sequelize.query(`PRAGMA synchronous = ${synchronous};`);
+        
+        console.log(`SQLite đã được cấu hình với journal_mode=${journalMode}, synchronous=${synchronous}`);
+      } catch (error) {
+        console.error('Lỗi khi thiết lập PRAGMA cho SQLite:', error);
+      }
       
       // Thiết lập quyền truy cập nếu đang chạy trên Linux
-      if (os.platform() === 'linux') {
+      if (os.platform() === 'linux' && dbPath) {
         try {
           fs.chmodSync(dbPath, 0o644); // rw-r--r--
           console.log(`Đã thiết lập quyền truy cập cho file database: ${dbPath}`);
