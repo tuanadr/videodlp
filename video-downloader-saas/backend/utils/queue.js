@@ -1,9 +1,14 @@
 const Queue = require('bull');
 const path = require('path');
 const fs = require('fs');
+const pLimit = require('p-limit');
 const Video = require('../models/Video');
 const User = require('../models/User');
 const ytdlp = require('./ytdlp');
+const systemMonitor = require('./systemMonitor'); // Import systemMonitor
+
+// Giới hạn concurrency cho xử lý trực tiếp khi Redis không khả dụng
+const directProcessLimit = pLimit(2); // Giới hạn 2 tác vụ đồng thời
 
 // Đường dẫn đến thư mục lưu trữ video
 const DOWNLOAD_DIR = path.join(__dirname, '../downloads');
@@ -15,176 +20,196 @@ let premiumQueue = null;
 let freeQueue = null;
 let anonymousQueue = null;
 
-// Biến để theo dõi tình trạng hệ thống
-let systemLoad = {
+// Biến để theo dõi tình trạng hệ thống (sẽ được cập nhật bởi systemMonitor)
+let currentSystemLoad = {
   cpu: 0,
   memory: 0,
-  isOverloaded: false
+  isOverloaded: false,
+  timestamp: new Date()
 };
 
-// Hàm cập nhật tình trạng hệ thống
-const updateSystemLoad = () => {
+// Hàm cập nhật tình trạng hệ thống từ systemMonitor
+const updateSystemLoadInfo = () => {
   try {
-    // Trong môi trường thực tế, bạn có thể sử dụng thư viện như os-utils để lấy thông tin CPU và RAM
-    // Đây là mô phỏng đơn giản
-    const currentLoad = Math.random() * 100; // Giả lập tải CPU từ 0-100%
-    const memoryUsage = Math.random() * 100; // Giả lập sử dụng RAM từ 0-100%
-    
-    systemLoad = {
-      cpu: currentLoad,
-      memory: memoryUsage,
-      isOverloaded: currentLoad > 80 || memoryUsage > 80,
+    const cpu = systemMonitor.getCpuUsage();
+    const memory = systemMonitor.getMemoryUsage();
+    const overloaded = systemMonitor.isSystemOverloaded();
+
+    const previousOverloadState = currentSystemLoad.isOverloaded;
+    currentSystemLoad = {
+      cpu: cpu,
+      memory: memory,
+      isOverloaded: overloaded,
       timestamp: new Date()
     };
     
-    console.log(`[SYSTEM_LOAD] CPU: ${systemLoad.cpu.toFixed(2)}%, Memory: ${systemLoad.memory.toFixed(2)}%, Overloaded: ${systemLoad.isOverloaded}`);
+    // console.log(`[SYSTEM_LOAD_INFO] CPU: ${currentSystemLoad.cpu.toFixed(2)}%, Memory: ${currentSystemLoad.memory.toFixed(2)}%, Overloaded: ${currentSystemLoad.isOverloaded}`);
     
-    // Điều chỉnh ưu tiên hàng đợi dựa trên tải hệ thống
-    adjustQueuePriorities();
+    // Điều chỉnh ưu tiên hàng đợi dựa trên tải hệ thống chỉ khi trạng thái quá tải thay đổi hoặc lần đầu
+    if (redisAvailable && (overloaded !== previousOverloadState || !currentSystemLoad.lastAdjustTimestamp)) {
+      adjustQueuePriorities();
+      currentSystemLoad.lastAdjustTimestamp = Date.now();
+    }
   } catch (error) {
-    console.error(`[SYSTEM_LOAD] Error updating system load: ${error.message}`);
+    console.error(`[QUEUE_ERROR] Error updating system load info: ${error.message}`);
   }
 };
 
 // Hàm điều chỉnh ưu tiên cho các hàng đợi
 const adjustQueuePriorities = async () => {
-  if (!redisAvailable) return;
+  if (!redisAvailable || !premiumQueue || !freeQueue || !anonymousQueue) {
+    // console.log('[QUEUE_DEBUG] adjustQueuePriorities skipped: Redis or queues not available.');
+    return;
+  }
   
   try {
-    if (systemLoad.isOverloaded) {
-      // Khi hệ thống quá tải, ưu tiên xử lý hàng đợi premium
-      console.log('[QUEUE_MANAGER] System overloaded, prioritizing premium queue');
+    const { isOverloaded, cpu, memory } = currentSystemLoad;
+    // console.log(`[QUEUE_DEBUG] Adjusting priorities. Overloaded: ${isOverloaded}, CPU: ${cpu}%, Memory: ${memory}%`);
+
+    if (isOverloaded) {
+      console.log(`[QUEUE_MANAGER] System overloaded (CPU: ${cpu.toFixed(1)}%, Mem: ${memory.toFixed(1)}%). Adjusting queues...`);
+      if (await premiumQueue.isPaused()) await premiumQueue.resume().then(() => console.log('[QUEUE_MANAGER] Premium queue resumed.'));
       
-      // Đảm bảo premium queue đang chạy
-      await premiumQueue.resume();
-      
-      // Nếu quá tải nghiêm trọng, tạm dừng các hàng đợi khác
-      if (systemLoad.cpu > 90 || systemLoad.memory > 90) {
-        console.log('[QUEUE_MANAGER] Severe overload, pausing free and anonymous queues');
-        await freeQueue.pause();
-        await anonymousQueue.pause();
+      if (cpu > 90 || memory > 90) {
+        console.log('[QUEUE_MANAGER] Severe overload: Pausing free and anonymous queues.');
+        if (!(await freeQueue.isPaused())) await freeQueue.pause().then(() => console.log('[QUEUE_MANAGER] Free queue paused.'));
+        if (!(await anonymousQueue.isPaused())) await anonymousQueue.pause().then(() => console.log('[QUEUE_MANAGER] Anonymous queue paused.'));
       } else {
-        // Nếu quá tải nhưng không nghiêm trọng, chỉ tạm dừng anonymous queue
-        console.log('[QUEUE_MANAGER] Moderate overload, pausing only anonymous queue');
-        await freeQueue.resume();
-        await anonymousQueue.pause();
+        console.log('[QUEUE_MANAGER] Moderate overload: Ensuring free queue runs, pausing anonymous queue.');
+        if (await freeQueue.isPaused()) await freeQueue.resume().then(() => console.log('[QUEUE_MANAGER] Free queue resumed.'));
+        if (!(await anonymousQueue.isPaused())) await anonymousQueue.pause().then(() => console.log('[QUEUE_MANAGER] Anonymous queue paused.'));
       }
     } else {
-      // Khi hệ thống bình thường, cho phép tất cả các hàng đợi chạy
-      console.log('[QUEUE_MANAGER] System load normal, resuming all queues');
-      
-      await premiumQueue.resume();
-      await freeQueue.resume();
-      await anonymousQueue.resume();
+      console.log(`[QUEUE_MANAGER] System load normal (CPU: ${cpu.toFixed(1)}%, Mem: ${memory.toFixed(1)}%). Ensuring all queues are running.`);
+      if (await premiumQueue.isPaused()) await premiumQueue.resume().then(() => console.log('[QUEUE_MANAGER] Premium queue resumed.'));
+      if (await freeQueue.isPaused()) await freeQueue.resume().then(() => console.log('[QUEUE_MANAGER] Free queue resumed.'));
+      if (await anonymousQueue.isPaused()) await anonymousQueue.resume().then(() => console.log('[QUEUE_MANAGER] Anonymous queue resumed.'));
     }
   } catch (error) {
-    console.error(`[QUEUE_MANAGER] Error adjusting queue priorities: ${error.message}`);
+    console.error(`[QUEUE_ERROR] Error adjusting queue priorities: ${error.message}`, error);
   }
 };
 
-// Thiết lập cập nhật tình trạng hệ thống mỗi 30 giây
-setInterval(updateSystemLoad, 30000);
+// Thiết lập cập nhật tình trạng hệ thống (tần suất này nên khớp hoặc chậm hơn systemMonitor.checkInterval)
+// systemMonitor.js đang chạy checkInterval là 30s (trong server.js) hoặc 60s (default)
+// Nên gọi updateSystemLoadInfo sau mỗi lần systemMonitor kiểm tra.
+// Tuy nhiên, để đơn giản, chúng ta sẽ gọi nó thường xuyên hơn một chút và dựa vào giá trị isSystemOverloaded đã được cập nhật.
+const systemLoadUpdateInterval = setInterval(updateSystemLoadInfo, 15000); // Cập nhật mỗi 15 giây
+// Điều chỉnh ưu tiên hàng đợi cũng có thể được gọi trong updateSystemLoadInfo
+// setInterval(adjustQueuePriorities, 10000); // Bỏ interval này, gọi trong updateSystemLoadInfo
 
-// Thiết lập điều chỉnh ưu tiên hàng đợi mỗi 10 giây
-setInterval(adjustQueuePriorities, 10000);
+// Helper function để xử lý logic chung sau khi video được tải xuống
+async function handleDownloadedVideo(videoId, userId, downloadPath, settings) {
+  const stats = fs.statSync(downloadPath);
+  const fileExt = path.extname(downloadPath).toLowerCase();
+  const finalFileType = fileExt.replace('.', '');
 
-// Hàm xử lý tải video trực tiếp (không qua queue)
-const processVideoDirectly = async (data) => {
-  const { url, formatId, userId, videoId, qualityKey, settings } = data;
-  
-  try {
-    console.log(`[DIRECT_PROCESS] Processing video directly: ${videoId}`);
-    
-    // Cập nhật tiến trình
-    const videoRecord = await Video.findByPk(videoId);
-    if (videoRecord) {
-      videoRecord.progress = 5;
-      await videoRecord.save();
-    }
-    
-    // Xác định thư mục đầu ra
-    const userDir = userId
-      ? path.join(DOWNLOAD_DIR, userId.toString())
-      : path.join(DOWNLOAD_DIR, 'anonymous');
-    
-    if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
-    
-    // Tải video
-    const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir, qualityKey);
-    
-    // Lấy thông tin file
-    const stats = fs.statSync(downloadPath);
-    const fileExt = path.extname(downloadPath).toLowerCase();
-    const finalFileType = fileExt.replace('.', '');
-    
-    // Xác định thời gian hết hạn
-    const userType = userId ? (settings?.premiumUsers?.includes(userId) ? 'premium' : 'registered') : 'anonymous';
-    const expiresAtTTL = userType === 'premium' ? (settings?.premiumStorageDays || 30) : (settings?.freeStorageDays || 7);
-    const finalExpiresAt = userType === 'anonymous'
-        ? new Date(Date.now() + (settings?.anonymousFileTTLMinutes || 5) * 60 * 1000)
-        : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
-    
-    // Cập nhật thông tin video
-    const videoToUpdate = await Video.findByPk(videoId);
-    if (videoToUpdate) {
-      videoToUpdate.status = 'completed';
-      videoToUpdate.downloadPath = downloadPath;
-      videoToUpdate.fileSize = stats.size;
-      videoToUpdate.fileType = finalFileType;
-      videoToUpdate.progress = 100;
-      videoToUpdate.expiresAt = finalExpiresAt;
-      await videoToUpdate.save();
-    }
-    
-    // Cập nhật thông tin người dùng
-    if (userId) {
-      const user = await User.findByPk(userId);
-      if (user) {
-        user.downloadCount += 1;
-        user.dailyDownloadCount += 1;
-        user.lastDownloadDate = new Date();
-        await user.save();
-      }
-    }
-    
-    // Thiết lập xóa file tạm thời cho anonymous
-    if (userType === 'anonymous') {
-      const anonymousFileTTL = (settings?.anonymousFileTTLMinutes || 5) * 60 * 1000;
-      setTimeout(async () => {
-        try {
-          if (fs.existsSync(downloadPath)) {
-            fs.unlinkSync(downloadPath);
-            console.log(`[DIRECT_PROCESS] Deleted temporary anonymous file: ${downloadPath}`);
-          }
-        } catch (unlinkError) {
-          console.error(`[DIRECT_PROCESS] Error deleting temporary file: ${unlinkError.message}`);
-        }
-      }, anonymousFileTTL);
-    }
-    
-    console.log(`[DIRECT_PROCESS] Video processed successfully: ${videoId}`);
-    
-    return {
-      videoId,
-      status: 'completed',
-      downloadPath,
-      fileSize: stats.size,
-      fileType: finalFileType
-    };
-  } catch (error) {
-    console.error(`[DIRECT_PROCESS] Error processing video ${videoId}:`, error);
-    
-    // Cập nhật trạng thái video thành thất bại
-    const failedVideo = await Video.findByPk(videoId);
-    if (failedVideo) {
-      failedVideo.status = 'failed';
-      failedVideo.progress = 0;
-      failedVideo.error = error.message.substring(0, 200);
-      await failedVideo.save();
-    }
-    
-    throw error;
+  const userRecord = userId ? await User.findByPk(userId) : null;
+  const userSubscription = userRecord ? userRecord.subscription : 'anonymous'; // Giả sử có trường subscription
+
+  // Xác định thời gian hết hạn dựa trên loại người dùng từ settings (nếu có) hoặc giá trị mặc định
+  let expiresAtTTLInDays = 7; // Mặc định 7 ngày cho free/anonymous
+  if (userSubscription === 'premium' && settings?.premiumStorageDays) {
+    expiresAtTTLInDays = settings.premiumStorageDays;
+  } else if (userSubscription === 'free' && settings?.freeStorageDays) {
+    expiresAtTTLInDays = settings.freeStorageDays;
   }
+  
+  const finalExpiresAt = new Date(Date.now() + expiresAtTTLInDays * 24 * 60 * 60 * 1000);
+  
+  // Xử lý TTL đặc biệt cho anonymous user nếu được định nghĩa
+  let anonymousFileDeletionTimeout = null;
+  if (userSubscription === 'anonymous' && settings?.anonymousFileTTLMinutes) {
+    finalExpiresAt = new Date(Date.now() + settings.anonymousFileTTLMinutes * 60 * 1000);
+    anonymousFileDeletionTimeout = settings.anonymousFileTTLMinutes * 60 * 1000;
+  }
+
+  const videoToUpdate = await Video.findByPk(videoId);
+  if (videoToUpdate) {
+    videoToUpdate.status = 'completed';
+    videoToUpdate.downloadPath = downloadPath;
+    videoToUpdate.fileSize = stats.size;
+    videoToUpdate.fileType = finalFileType;
+    videoToUpdate.progress = 100;
+    videoToUpdate.expiresAt = finalExpiresAt;
+    await videoToUpdate.save();
+  }
+
+  if (userRecord) {
+    userRecord.downloadCount = (userRecord.downloadCount || 0) + 1;
+    userRecord.dailyDownloadCount = (userRecord.dailyDownloadCount || 0) + 1;
+    userRecord.lastDownloadDate = new Date();
+    await userRecord.save();
+  }
+
+  if (anonymousFileDeletionTimeout) {
+    setTimeout(async () => {
+      try {
+        if (fs.existsSync(downloadPath)) {
+          fs.unlinkSync(downloadPath);
+          console.log(`[CLEANUP] Deleted temporary anonymous file: ${downloadPath}`);
+        }
+      } catch (unlinkError) {
+        console.error(`[CLEANUP] Error deleting temporary file: ${unlinkError.message}`);
+      }
+    }, anonymousFileDeletionTimeout);
+  }
+
+  return {
+    videoId,
+    status: 'completed',
+    downloadPath,
+    fileSize: stats.size,
+    fileType: finalFileType,
+  };
+}
+
+// Helper function để cập nhật trạng thái video khi xử lý thất bại
+async function handleFailedVideoProcessing(videoId, error) {
+  const failedVideo = await Video.findByPk(videoId);
+  if (failedVideo) {
+    failedVideo.status = 'failed';
+    failedVideo.progress = 0;
+    failedVideo.error = error.message.substring(0, 255); // Giới hạn độ dài lỗi
+    await failedVideo.save();
+  }
+}
+
+
+// Hàm xử lý tải video trực tiếp (không qua queue), sử dụng p-limit
+const processVideoDirectly = async (data) => {
+  return directProcessLimit(async () => {
+    const { url, formatId, userId, videoId, qualityKey, settings } = data;
+    try {
+      console.log(`[QUEUE_PROCESS_DIRECT] Start direct processing for videoId: ${videoId}, URL: ${url}`);
+    
+      const videoRecord = await Video.findByPk(videoId);
+      if (videoRecord) {
+        videoRecord.status = 'processing';
+        videoRecord.progress = 5;
+        await videoRecord.save();
+        console.log(`[QUEUE_PROCESS_DIRECT] VideoId ${videoId}: Status updated to processing, progress 5%.`);
+      } else {
+        console.warn(`[QUEUE_PROCESS_DIRECT] VideoId ${videoId}: Record not found before processing.`);
+      }
+    
+      const userDir = userId ? path.join(DOWNLOAD_DIR, userId.toString()) : path.join(DOWNLOAD_DIR, 'anonymous');
+      if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+    
+      console.log(`[QUEUE_PROCESS_DIRECT] VideoId ${videoId}: Calling ytdlp.downloadVideo...`);
+      const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir, qualityKey);
+      console.log(`[QUEUE_PROCESS_DIRECT] VideoId ${videoId}: ytdlp.downloadVideo completed. Path: ${downloadPath}`);
+      
+      const result = await handleDownloadedVideo(videoId, userId, downloadPath, settings);
+      console.log(`[QUEUE_PROCESS_DIRECT] VideoId ${videoId}: Successfully processed directly. Result:`, result);
+      return result;
+
+    } catch (error) {
+      console.error(`[QUEUE_ERROR] Error in processVideoDirectly for videoId ${videoId}: ${error.message}`, error);
+      await handleFailedVideoProcessing(videoId, error);
+      throw error;
+    }
+  });
 };
 
 // Hàm xử lý công việc tải video (dùng cho cả 3 hàng đợi)
@@ -192,83 +217,34 @@ const processVideoJob = async (job) => {
   const { url, formatId, userId, videoId, qualityKey, settings } = job.data;
   
   try {
-    // Cập nhật tiến trình
     const jobVideo = await Video.findByPk(videoId);
     if (jobVideo) {
+      jobVideo.status = 'processing';
       jobVideo.progress = 5;
       await jobVideo.save();
+      console.log(`[QUEUE_JOB_PROCESS] Job ${job.id} (VideoId ${videoId}): Status updated to processing, progress 5%.`);
+    } else {
+      console.warn(`[QUEUE_JOB_PROCESS] Job ${job.id} (VideoId ${videoId}): Record not found before processing.`);
     }
-    job.progress(5);
+    await job.progress(5);
     
-    // Xác định thư mục đầu ra
-    const userDir = userId
-      ? path.join(DOWNLOAD_DIR, userId.toString())
-      : path.join(DOWNLOAD_DIR, 'anonymous');
-    
+    const userDir = userId ? path.join(DOWNLOAD_DIR, userId.toString()) : path.join(DOWNLOAD_DIR, 'anonymous');
     if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
     
-    // Tải video
+    console.log(`[QUEUE_JOB_PROCESS] Job ${job.id} (VideoId ${videoId}): Calling ytdlp.downloadVideo...`);
     const downloadPath = await ytdlp.downloadVideo(url, formatId, userDir, qualityKey);
+    console.log(`[QUEUE_JOB_PROCESS] Job ${job.id} (VideoId ${videoId}): ytdlp.downloadVideo completed. Path: ${downloadPath}`);
     
-    // Cập nhật tiến trình
-    job.progress(80);
+    await job.progress(80);
     
-    // Lấy thông tin file
-    const stats = fs.statSync(downloadPath);
-    const fileExt = path.extname(downloadPath).toLowerCase();
-    const finalFileType = fileExt.replace('.', '');
-    
-    // Xác định thời gian hết hạn
-    const userType = userId ? (settings?.premiumUsers?.includes(userId) ? 'premium' : 'registered') : 'anonymous';
-    const expiresAtTTL = userType === 'premium' ? (settings?.premiumStorageDays || 30) : (settings?.freeStorageDays || 7);
-    const finalExpiresAt = userType === 'anonymous'
-        ? new Date(Date.now() + (settings?.anonymousFileTTLMinutes || 5) * 60 * 1000)
-        : new Date(Date.now() + expiresAtTTL * 24 * 60 * 60 * 1000);
-    
-    // Cập nhật thông tin video
-    const completedVideo = await Video.findByPk(videoId);
-    if (completedVideo) {
-      completedVideo.status = 'completed';
-      completedVideo.downloadPath = downloadPath;
-      completedVideo.fileSize = stats.size;
-      completedVideo.fileType = finalFileType;
-      completedVideo.progress = 100;
-      completedVideo.expiresAt = finalExpiresAt;
-      await completedVideo.save();
-    }
-    
-    // Cập nhật thông tin người dùng
-    if (userId) {
-      const user = await User.findByPk(userId);
-      if (user) {
-        user.downloadCount += 1;
-        user.dailyDownloadCount += 1;
-        user.lastDownloadDate = new Date();
-        await user.save();
-      }
-    }
-    
-    job.progress(100);
-    
-    return {
-      videoId,
-      status: 'completed',
-      downloadPath,
-      fileSize: stats.size,
-      fileType: finalFileType
-    };
+    const result = await handleDownloadedVideo(videoId, userId, downloadPath, settings);
+    await job.progress(100);
+    console.log(`[QUEUE_JOB_PROCESS] Job ${job.id} (VideoId ${videoId}): Successfully processed. Result:`, result);
+    return result;
+
   } catch (error) {
-    console.error(`[QUEUE] Error processing job ${job.id}:`, error);
-    
-    // Cập nhật trạng thái video thành thất bại
-    const errorVideo = await Video.findByPk(videoId);
-    if (errorVideo) {
-      errorVideo.status = 'failed';
-      errorVideo.progress = 0;
-      errorVideo.error = error.message.substring(0, 200);
-      await errorVideo.save();
-    }
-    
+    console.error(`[QUEUE_ERROR] Error processing job ${job.id} for videoId ${videoId}: ${error.message}`, error);
+    await handleFailedVideoProcessing(videoId, error);
     throw error;
   }
 };
@@ -303,30 +279,39 @@ const initializeRedisQueues = async () => {
     
     // Cấu hình các hàng đợi
     const configureQueue = (queue, name, concurrency) => {
+      console.log(`[QUEUE_SETUP] Configuring queue: ${name} with concurrency: ${concurrency}`);
       queue.on('error', (error) => {
-        console.error(`[QUEUE] Error in ${name}: ${error.message}`);
+        console.error(`[QUEUE_ERROR] Error in ${name}: ${error.message}`, error);
         if (redisAvailable) {
-          console.log(`[QUEUE] Switching to direct processing mode due to error in ${name}`);
-          redisAvailable = false;
+          console.warn(`[QUEUE_ALERT] Switching to direct processing mode due to error in ${name}.`);
+          redisAvailable = false; // Consider if this should immediately disable Redis for all.
         }
       });
       
       queue.on('failed', (job, error) => {
-        console.error(`[QUEUE] Job ${job.id} in ${name} failed: ${error.message}`);
+        console.error(`[QUEUE_JOB_FAILED] Job ${job.id} in ${name} failed: ${error.message}`, { jobId: job.id, data: job.data, error });
       });
       
       queue.on('completed', (job, result) => {
-        console.log(`[QUEUE] Job ${job.id} in ${name} completed with result:`, result);
+        console.log(`[QUEUE_JOB_COMPLETED] Job ${job.id} in ${name} completed.`, { jobId: job.id, result });
+      });
+
+      queue.on('stalled', (job) => {
+        console.warn(`[QUEUE_JOB_STALLED] Job ${job.id} in ${name} has stalled.`, { jobId: job.id, data: job.data });
       });
       
+      queue.on('progress', (job, progress) => {
+        // console.log(`[QUEUE_JOB_PROGRESS] Job ${job.id} in ${name} progress: ${progress}%`);
+      });
+
       // Xử lý công việc tải video với số lượng worker khác nhau
       queue.process('downloadVideo', concurrency, processVideoJob);
     };
     
-    // Cấu hình từng hàng đợi với số lượng worker khác nhau
-    configureQueue(premiumQueue, 'premium-queue', 5); // Premium có nhiều worker nhất
-    configureQueue(freeQueue, 'free-queue', 3);       // Free có số worker trung bình
-    configureQueue(anonymousQueue, 'anonymous-queue', 2); // Anonymous có ít worker nhất
+    // Cấu hình từng hàng đợi với số lượng worker khác nhau (giảm để tránh quá tải)
+    configureQueue(premiumQueue, 'premium-queue', 3); // Premium: 3 workers
+    configureQueue(freeQueue, 'free-queue', 2);       // Free: 2 workers
+    configureQueue(anonymousQueue, 'anonymous-queue', 1); // Anonymous: 1 worker
     
     // Kiểm tra kết nối Redis
     try {
@@ -372,10 +357,10 @@ initializeRedisQueues().catch(error => {
 
 // Hàm thêm job vào queue hoặc xử lý trực tiếp
 const addVideoJob = async (jobData) => {
-  // Nếu Redis không khả dụng, xử lý trực tiếp
+  // Nếu Redis không khả dụng, xử lý trực tiếp với giới hạn concurrency
   if (!redisAvailable || !premiumQueue || !freeQueue || !anonymousQueue) {
-    console.log('[QUEUE] Redis not available, processing directly');
-    return processVideoDirectly(jobData);
+    console.log('[QUEUE] Redis not available, processing directly with limit.');
+    return processVideoDirectly(jobData); // processVideoDirectly giờ đã được bọc bởi p-limit
   }
   
   try {
@@ -408,14 +393,14 @@ const addVideoJob = async (jobData) => {
     // Thêm thông tin về thời gian chờ ước tính
     let estimatedWaitTime = 0;
     
-    if (systemLoad.isOverloaded) {
+    if (currentSystemLoad.isOverloaded) {
       // Ước tính thời gian chờ dựa trên loại người dùng và tải hệ thống
       if (userType === 'premium') {
         estimatedWaitTime = 30; // 30 giây
       } else if (userType === 'free') {
-        estimatedWaitTime = 120; // 2 phút
+        estimatedWaitTime = (currentSystemLoad.cpu > 90 || currentSystemLoad.memory > 90) ? 300 : 120; // 2-5 phút
       } else {
-        estimatedWaitTime = 300; // 5 phút
+        estimatedWaitTime = (currentSystemLoad.cpu > 90 || currentSystemLoad.memory > 90) ? 600 : 300; // 5-10 phút
       }
     } else {
       // Thời gian chờ thấp hơn khi hệ thống không quá tải
@@ -436,31 +421,37 @@ const addVideoJob = async (jobData) => {
     };
   } catch (error) {
     console.error(`[QUEUE] Error adding job to queue: ${error.message}`);
-    console.log('[QUEUE] Falling back to direct processing');
+    console.log('[QUEUE] Falling back to direct processing with limit.');
     // Đánh dấu Redis không khả dụng nếu lỗi liên quan đến kết nối
     if (error.message.includes('connect') || error.message.includes('timeout')) {
       redisAvailable = false;
     }
-    return processVideoDirectly(jobData);
+    return processVideoDirectly(jobData); // processVideoDirectly giờ đã được bọc bởi p-limit
   }
 };
 
 // Hàm lấy thông tin về tình trạng hệ thống
-const getSystemStatus = () => {
+const getSystemStatus = async () => { // Đánh dấu hàm là async
   return {
-    systemLoad,
-    queues: redisAvailable ? {
+    systemLoad: currentSystemLoad, // Sử dụng currentSystemLoad đã được cập nhật
+    queues: redisAvailable && premiumQueue && freeQueue && anonymousQueue ? { // Kiểm tra queues tồn tại
       premium: {
         name: 'premium-queue',
-        active: true
+        isPaused: premiumQueue ? await premiumQueue.isPaused() : true,
+        activeJobs: premiumQueue ? await premiumQueue.getActiveCount() : 0,
+        waitingJobs: premiumQueue ? await premiumQueue.getWaitingCount() : 0,
       },
       free: {
         name: 'free-queue',
-        active: true
+        isPaused: freeQueue ? await freeQueue.isPaused() : true,
+        activeJobs: freeQueue ? await freeQueue.getActiveCount() : 0,
+        waitingJobs: freeQueue ? await freeQueue.getWaitingCount() : 0,
       },
       anonymous: {
         name: 'anonymous-queue',
-        active: !systemLoad.isOverloaded || systemLoad.cpu <= 90
+        isPaused: anonymousQueue ? await anonymousQueue.isPaused() : true,
+        activeJobs: anonymousQueue ? await anonymousQueue.getActiveCount() : 0,
+        waitingJobs: anonymousQueue ? await anonymousQueue.getWaitingCount() : 0,
       }
     } : null
   };
@@ -468,32 +459,39 @@ const getSystemStatus = () => {
 
 // Hàm dọn dẹp khi tắt ứng dụng
 const cleanupQueues = async () => {
+  console.log('[QUEUE] Cleaning up queues and intervals before shutdown...');
+  clearInterval(systemLoadUpdateInterval); // Dọn dẹp interval
   if (redisAvailable) {
     try {
-      console.log('[QUEUE] Cleaning up queues before shutdown');
       if (premiumQueue) await premiumQueue.close();
       if (freeQueue) await freeQueue.close();
       if (anonymousQueue) await anonymousQueue.close();
+      console.log('[QUEUE] All queues closed.');
     } catch (error) {
-      console.error('[QUEUE] Error during cleanup:', error.message);
+      console.error('[QUEUE] Error during queue cleanup:', error.message);
     }
   }
+  redisAvailable = false; // Đảm bảo không có job nào được thêm vào sau khi cleanup
 };
 
 // Đăng ký sự kiện dọn dẹp khi tắt ứng dụng
-process.on('SIGINT', async () => {
+// Chỉ đăng ký một lần để tránh memory leak
+let shuttingDown = false;
+const gracefulShutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[APP_LIFECYCLE] Received ${signal}. Starting graceful shutdown...`);
   await cleanupQueues();
+  console.log(`[APP_LIFECYCLE] Graceful shutdown complete. Exiting.`);
   process.exit(0);
-});
+};
 
-process.on('SIGTERM', async () => {
-  await cleanupQueues();
-  process.exit(0);
-});
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 module.exports = {
   addVideoJob,
-  processVideoDirectly,
+  // processVideoDirectly, // Không cần export trực tiếp nữa vì nó được gọi nội bộ
   isRedisAvailable: () => redisAvailable,
   getSystemStatus,
   initializeRedisQueues // Export hàm này để có thể gọi từ bên ngoài nếu cần
