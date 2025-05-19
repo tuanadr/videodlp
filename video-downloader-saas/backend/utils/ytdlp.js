@@ -1,15 +1,10 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const NodeCache = require('node-cache');
-const { 
-  processPreMergedVideoFormats,
-  processVideoOnlyAndSyntheticFormats,
-  processAudioOnlyFormats
-} = require('./ytdlpHelper_VideoFormats');
 
-// Cache cho kết quả getVideoInfo, cache trong 5 phút
-const videoInfoCache = new NodeCache({ stdTTL: 300 });
+// Đường dẫn đến thư mục yt-dlp
+// Sửa đường dẫn để đảm bảo nó trỏ đến thư mục gốc của yt-dlp
+const YT_DLP_PATH = path.join(__dirname, '../../../');
 
 // Thêm hàm helper để log
 const logDebug = (message, data = null) => {
@@ -34,29 +29,19 @@ exports.getVideoInfo = (url) => {
       console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
     }
     
-    logDebug(`[getVideoInfo] Start for URL: ${correctedUrl}`);
-
-    // Kiểm tra cache trước
-    const cachedInfo = videoInfoCache.get(correctedUrl);
-    if (cachedInfo) {
-      logDebug(`[getVideoInfo] Cache hit for URL: ${correctedUrl}`);
-      return Promise.resolve(JSON.parse(JSON.stringify(cachedInfo))); // Trả về bản copy để tránh thay đổi cache
-    }
-    logDebug(`[getVideoInfo] Cache miss for URL: ${correctedUrl}`);
+    logDebug(`Getting video info for URL: ${correctedUrl}`);
     
     const args = [
       correctedUrl,
       '--dump-json',
       '--no-playlist',
-      '--flat-playlist',
-      '--no-warnings', // Giảm output không cần thiết
-      '--ignore-config', // Bỏ qua file config nếu có
-      '--no-colors' // Tắt màu trong output
+      '--flat-playlist'
     ];
 
-    logDebug(`Command: yt-dlp ${args.join(' ')}`);
+    logDebug(`yt-dlp path: ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')}`);
+    logDebug(`Command: python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`);
     
-    const ytDlp = spawn('yt-dlp', args);
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
     
     let output = '';
     let errorOutput = '';
@@ -71,17 +56,14 @@ exports.getVideoInfo = (url) => {
     });
 
     ytDlp.on('close', (code) => {
-      logDebug(`[getVideoInfo] yt-dlp process closed with code ${code} for URL: ${correctedUrl}`);
       if (code !== 0) {
-        const errorMessage = `yt-dlp exited with code ${code} for getVideoInfo. URL: ${correctedUrl}. Stderr: ${errorOutput}`;
-        console.error(`[YTDLP_ERROR] ${errorMessage}`);
-        logDebug(`[getVideoInfo] Error details`, { error: errorOutput });
-        return reject(new Error(errorMessage));
+        logDebug(`yt-dlp exited with code ${code}`, { error: errorOutput });
+        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
       }
 
       try {
         const videoInfo = JSON.parse(output);
-        logDebug('[getVideoInfo] Raw video info received', { id: videoInfo.id, title: videoInfo.title, url: correctedUrl });
+        logDebug('Raw video info received', { id: videoInfo.id, title: videoInfo.title });
         
         // Lọc và định dạng lại thông tin video
         const formattedInfo = {
@@ -101,28 +83,230 @@ exports.getVideoInfo = (url) => {
         
         // Lọc và phân loại các định dạng
         if (videoInfo.formats && Array.isArray(videoInfo.formats)) {
-          const allFormats = videoInfo.formats;
-          logDebug(`Total formats found: ${allFormats.length}`);
-          // console.log(`[YTDLP] Raw formats from yt-dlp:`, JSON.stringify(allFormats.slice(0, 5), null, 2));
-
-          const videoAudioFormats = allFormats.filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none');
-          const videoOnlyFormats = allFormats.filter(f => f.vcodec && f.vcodec !== 'none' && (!f.acodec || f.acodec === 'none'));
-          const audioOnlyFormats = allFormats.filter(f => (!f.vcodec || f.vcodec === 'none') && f.acodec && f.acodec !== 'none');
+          logDebug(`Total formats found: ${videoInfo.formats.length}`);
+          console.log(`[YTDLP] Raw formats from yt-dlp:`, JSON.stringify(videoInfo.formats.slice(0, 5), null, 2));
           
-          // console.log(`[YTDLP] Format counts: Video+Audio: ${videoAudioFormats.length}, Video-Only: ${videoOnlyFormats.length}, Audio-Only: ${audioOnlyFormats.length}`);
-
-          // Xử lý các định dạng video có sẵn âm thanh
-          processPreMergedVideoFormats(videoAudioFormats, qualityOptions, availableResolutions, videoInfo.duration);
-
-          // Xử lý các định dạng video chỉ có hình (cần ghép với audio)
-          // và thêm các lựa chọn cho độ phân giải chưa có
-          processVideoOnlyAndSyntheticFormats(allFormats, qualityOptions, availableResolutions, videoInfo.duration);
+          // Lọc các định dạng video và audio
+          const videoFormats = videoInfo.formats.filter(format =>
+            format.vcodec && format.vcodec !== 'none'
+          );
           
-          // Sắp xếp các lựa chọn chất lượng video theo độ phân giải giảm dần
+          const audioFormats = videoInfo.formats.filter(format =>
+            format.acodec && format.acodec !== 'none'
+          );
+          
+          // Lọc các định dạng video có âm thanh
+          const videoAudioFormats = videoInfo.formats.filter(format =>
+            format.vcodec && format.vcodec !== 'none' &&
+            format.acodec && format.acodec !== 'none'
+          );
+          
+          // Lọc các định dạng chỉ âm thanh
+          const audioOnlyFormats = videoInfo.formats.filter(format =>
+            (!format.vcodec || format.vcodec === 'none') &&
+            format.acodec && format.acodec !== 'none'
+          );
+          
+          console.log(`[YTDLP] Format counts: Video formats: ${videoFormats.length}, Audio formats: ${audioFormats.length}, Video+Audio formats: ${videoAudioFormats.length}, Audio-only formats: ${audioOnlyFormats.length}`);
+          
+          // Tạo các lựa chọn chất lượng video
+          // Nếu có các định dạng video+audio sẵn có, sử dụng chúng
+          if (videoAudioFormats.length > 0) {
+            console.log(`[YTDLP] Using pre-merged video+audio formats`);
+            
+            // Nhóm theo độ phân giải
+            const resolutionGroups = {};
+            videoAudioFormats.forEach(format => {
+              const height = format.height || 0;
+              if (!resolutionGroups[height]) {
+                resolutionGroups[height] = [];
+              }
+              resolutionGroups[height].push(format);
+            });
+            
+            // Lấy các độ phân giải và sắp xếp giảm dần
+            const resolutions = Object.keys(resolutionGroups)
+              .map(Number)
+              .filter(r => r > 0)
+              .sort((a, b) => b - a);
+              
+            console.log(`[YTDLP] Available resolutions from pre-merged formats:`, resolutions);
+            
+            // Thêm các lựa chọn chất lượng từ các định dạng đã có
+            resolutions.forEach(resolution => {
+              const formats = resolutionGroups[resolution];
+              // Chọn định dạng tốt nhất cho độ phân giải này
+              const bestFormat = formats.reduce((best, current) => {
+                // Ưu tiên theo bitrate tổng thể
+                return (!best || (current.tbr || 0) > (best.tbr || 0)) ? current : best;
+              }, null);
+              
+              availableResolutions.add(resolution);
+              
+              // Tính kích thước ước tính
+              let fileSizeApprox = '';
+              if (bestFormat.filesize_approx) {
+                fileSizeApprox = formatFileSize(bestFormat.filesize_approx);
+                console.log(`[YTDLP] Using filesize_approx for ${resolution}p: ${fileSizeApprox}`);
+              } else if (bestFormat.filesize) {
+                fileSizeApprox = formatFileSize(bestFormat.filesize);
+                console.log(`[YTDLP] Using filesize for ${resolution}p: ${fileSizeApprox}`);
+              } else if (bestFormat.tbr) {
+                // Ước tính kích thước dựa trên bitrate và thời lượng
+                const durationInSeconds = videoInfo.duration || 0;
+                // Áp dụng hệ số nén
+                const compressionFactor = 0.7;
+                const fileSizeBytes = (bestFormat.tbr * 1000 * durationInSeconds * compressionFactor) / 8;
+                fileSizeApprox = formatFileSize(fileSizeBytes);
+                console.log(`[YTDLP] Estimated file size from tbr for ${resolution}p: ${fileSizeApprox} (duration: ${durationInSeconds}s, bitrate: ${bestFormat.tbr} Kbps)`);
+              } else {
+                // Ước tính dựa trên độ phân giải
+                const durationInSeconds = videoInfo.duration || 0;
+                let bitrate = 0;
+                
+                // Ước tính bitrate dựa trên độ phân giải
+                if (resolution >= 2160) bitrate = 15000;
+                else if (resolution >= 1440) bitrate = 8000;
+                else if (resolution >= 1080) bitrate = 4000;
+                else if (resolution >= 720) bitrate = 2000;
+                else if (resolution >= 480) bitrate = 1000;
+                else bitrate = 700;
+                
+                // Áp dụng hệ số nén
+                const compressionFactor = 0.7;
+                const fileSizeBytes = (bitrate * 1000 * durationInSeconds * compressionFactor) / 8;
+                fileSizeApprox = formatFileSize(fileSizeBytes);
+                console.log(`[YTDLP] Estimated file size for ${resolution}p: ${fileSizeApprox} (duration: ${durationInSeconds}s, bitrate: ${bitrate} Kbps)`);
+              }
+              
+              // Tạo lựa chọn chất lượng
+              qualityOptions.push({
+                label: `${resolution}p${resolution >= 2160 ? ' (4K)' : resolution >= 1440 ? ' (2K)' : resolution >= 1080 ? ' (FHD)' : resolution >= 720 ? ' (HD)' : ''}`,
+                qualityKey: `${resolution}p`,
+                type: 'video',
+                format_id: bestFormat.format_id,
+                ext: bestFormat.ext || 'mp4',
+                height: resolution,
+                details: `MP4, Video + Âm thanh`,
+                isPremium: resolution > 720, // Định dạng premium nếu độ phân giải > 720p
+                fileSizeApprox: fileSizeApprox
+              });
+            });
+          }
+          
+          // Chỉ hiển thị các độ phân giải thực sự có sẵn, không thêm các "synthetic option"
+          console.log(`[YTDLP] Only showing actually available resolutions, not adding synthetic options`);
+          
+          // Tìm các độ phân giải thực sự có sẵn
+          const availableHeights = videoFormats
+            .map(format => format.height || 0)
+            .filter(height => height > 0);
+          
+          // Loại bỏ các độ phân giải trùng lặp và sắp xếp giảm dần
+          const uniqueAvailableHeights = [...new Set(availableHeights)].sort((a, b) => b - a);
+          
+          console.log(`[YTDLP] Actually available resolutions: ${uniqueAvailableHeights.join(', ')}p`);
+          
+          // Chỉ thêm các tùy chọn cho các độ phân giải thực sự có sẵn mà chưa có trong danh sách
+          // Lọc chỉ hiển thị độ phân giải từ 480p trở lên
+          uniqueAvailableHeights.filter(resolution => resolution >= 480).forEach(resolution => {
+            // Chỉ thêm nếu chưa có trong danh sách
+            if (!qualityOptions.some(opt => opt.height === resolution)) {
+              console.log(`[YTDLP] Adding option for actually available resolution: ${resolution}p`);
+              availableResolutions.add(resolution);
+                
+                // Ước tính kích thước dựa trên độ phân giải
+                let fileSizeApprox = '';
+                // Ước tính kích thước dựa trên độ phân giải và thời lượng
+                const durationInSeconds = videoInfo.duration || 0;
+                let bitrate = 0;
+                
+                // Ước tính bitrate dựa trên độ phân giải (điều chỉnh giảm để phản ánh chính xác hơn)
+                // Các giá trị này đã được điều chỉnh dựa trên dữ liệu thực tế
+                if (resolution >= 2160) bitrate = 15000; // ~15 Mbps cho 4K
+                else if (resolution >= 1440) bitrate = 8000; // ~8 Mbps cho 2K
+                else if (resolution >= 1080) bitrate = 4000; // ~4 Mbps cho Full HD
+                else if (resolution >= 720) bitrate = 2000; // ~2 Mbps cho HD
+                else if (resolution >= 480) bitrate = 1000; // ~1 Mbps cho SD
+                else bitrate = 700; // ~700 Kbps cho thấp hơn
+                
+                // Áp dụng hệ số nén (YouTube sử dụng nén hiệu quả)
+                const compressionFactor = 0.7; // Hệ số nén trung bình
+                
+                // Ước tính kích thước file (bitrate * thời lượng / 8 để chuyển từ bit sang byte)
+                const fileSizeBytes = (bitrate * 1000 * durationInSeconds * compressionFactor) / 8;
+                fileSizeApprox = formatFileSize(fileSizeBytes);
+                
+                // Log để debug
+                console.log(`[YTDLP] Estimated file size for ${resolution}p: ${fileSizeApprox} (duration: ${durationInSeconds}s, bitrate: ${bitrate} Kbps)`);
+                
+                // Tạo lựa chọn chất lượng tổng hợp
+                qualityOptions.push({
+                  label: `${resolution}p${resolution >= 2160 ? ' (4K)' : resolution >= 1440 ? ' (2K)' : resolution >= 1080 ? ' (FHD)' : resolution >= 720 ? ' (HD)' : ''}`,
+                  qualityKey: `${resolution}p`,
+                  type: 'video',
+                  format_id: `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]`,
+                  ext: 'mp4',
+                  height: resolution,
+                  details: `MP4, Video + Âm thanh (Tự động ghép)`,
+                  isPremium: resolution > 720, // Định dạng premium nếu độ phân giải > 720p
+                  fileSizeApprox: fileSizeApprox
+                });
+              }
+          });
+          
+          // Sắp xếp các lựa chọn chất lượng theo độ phân giải giảm dần
           qualityOptions.sort((a, b) => (b.height || 0) - (a.height || 0));
           
-          // Xử lý các định dạng chỉ âm thanh
-          processAudioOnlyFormats(audioOnlyFormats, audioOptions);
+          // Không thêm tùy chọn "Chất lượng cao nhất" nữa, chỉ hiển thị các độ phân giải cụ thể
+          console.log(`[YTDLP] Skipping 'best' option, only showing specific resolutions`);
+          
+          // Nếu không tìm thấy định dạng video có âm thanh, thêm lựa chọn "Chất lượng tốt nhất có sẵn"
+          if (qualityOptions.length === 1 && videoInfo.formats.length > 0) { // Chỉ có tùy chọn "Chất lượng cao nhất"
+            console.log(`[YTDLP] No quality options found, adding 'best' option`);
+            qualityOptions.push({
+              label: 'Chất lượng tốt nhất có sẵn',
+              qualityKey: 'best_available',
+              type: 'video',
+              format_id: 'best',
+              ext: 'mp4',
+              details: `Chất lượng tốt nhất có sẵn`,
+              isPremium: false
+            });
+          }
+          
+          // Thêm các lựa chọn âm thanh
+          if (audioOnlyFormats.length > 0) {
+            // Tìm định dạng âm thanh chất lượng cao nhất
+            const bestAudioFormat = audioOnlyFormats.reduce((best, current) => {
+              return (!best || (current.abr || 0) > (best.abr || 0)) ? current : best;
+            }, null);
+            
+            if (bestAudioFormat) {
+              console.log(`[YTDLP] Adding best audio option: ${bestAudioFormat.ext} ${bestAudioFormat.abr}kbps`);
+              audioOptions.push({
+                label: `Âm thanh (${bestAudioFormat.ext.toUpperCase()} - ${bestAudioFormat.abr || 128}kbps)`,
+                qualityKey: `audio_${bestAudioFormat.ext}_${bestAudioFormat.abr || 128}`,
+                type: 'audio',
+                format_id: bestAudioFormat.format_id,
+                ext: bestAudioFormat.ext || 'webm',
+                details: `${bestAudioFormat.ext.toUpperCase()}, Chỉ âm thanh`,
+                isPremium: false
+              });
+            }
+          }
+          
+          // Luôn thêm lựa chọn MP3
+          console.log(`[YTDLP] Adding MP3 audio option`);
+          audioOptions.push({
+            label: 'Âm thanh (MP3 - 128kbps)',
+            qualityKey: 'audio_mp3_128',
+            type: 'audio',
+            format_id: 'bestaudio',
+            ext: 'mp3',
+            details: `MP3, Chỉ âm thanh`,
+            isPremium: false
+          });
         }
         
         // Kết hợp tất cả các lựa chọn
@@ -144,9 +328,8 @@ exports.getVideoInfo = (url) => {
           }
         };
 
-        logDebug('[getVideoInfo] Simplified video info', {
+        logDebug('Simplified video info', {
           title: formattedInfo.title,
-          url: correctedUrl,
           formatCounts: {
             videoAudio: qualityOptions.length,
             audioOnly: audioOptions.length,
@@ -155,15 +338,10 @@ exports.getVideoInfo = (url) => {
           availableResolutions: Array.from(availableResolutions).filter(resolution => resolution >= 480).sort((a, b) => b - a)
         });
 
-        // Lưu vào cache
-        videoInfoCache.set(correctedUrl, formattedInfo);
-        logDebug(`[getVideoInfo] Success for URL: ${correctedUrl}`);
         resolve(formattedInfo);
       } catch (error) {
-        const parseErrorMessage = `Failed to parse video info for URL: ${correctedUrl}. Error: ${error.message}`;
-        console.error(`[YTDLP_ERROR] ${parseErrorMessage}`);
-        logDebug('[getVideoInfo] Parse error details', { error: error.message, output: output.substring(0, 500), url: correctedUrl });
-        reject(new Error(parseErrorMessage));
+        logDebug('Failed to parse video info', { error: error.message, output: output.substring(0, 500) });
+        reject(new Error(`Failed to parse video info: ${error.message}`));
       }
     });
   });
@@ -182,10 +360,12 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
     let correctedUrl = url;
     if (url.includes('tiktiktok.com')) {
       correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
-      // console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`); // Already logged by logDebug
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
     }
     
-    logDebug(`[downloadVideo] Start for URL: ${correctedUrl}`, { formatId, qualityKey, outputDir });
+    logDebug(`Downloading video from URL: ${correctedUrl}`);
+    logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
+    logDebug(`Output directory: ${outputDir}`);
     
     // Tạo tên file duy nhất
     const uniqueId = Date.now();
@@ -335,11 +515,11 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
       console.log(`[YTDLP_WARNING] ffmpeg not found, video merging may fail`);
     }
 
-    const commandString = `yt-dlp ${args.join(' ')}`;
+    const commandString = `python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`;
     logDebug(`Command: ${commandString}`);
     console.log(`[YTDLP_DOWNLOAD_COMMAND] Executing full command: ${commandString}`);
     
-    const ytDlp = spawn('yt-dlp', args);
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
     
     let errorOutput = '';
     let outputFile = '';
@@ -419,13 +599,12 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
     let printedFilePath = '';
     
     ytDlp.on('close', (code) => {
-      logDebug(`[downloadVideo] yt-dlp process closed with code ${code} for URL: ${correctedUrl}`);
+      console.log(`[YTDLP_PROCESS] yt-dlp process exited with code ${code}`);
       
       if (code !== 0) {
-        const errorMessage = `yt-dlp exited with code ${code} for downloadVideo. URL: ${correctedUrl}, Format: ${effectiveQuality}. Stderr: ${errorOutput}`;
-        console.error(`[YTDLP_ERROR] ${errorMessage}`);
-        logDebug(`[downloadVideo] Error details`, { error: errorOutput, url: correctedUrl, format: effectiveQuality });
-        return reject(new Error(errorMessage));
+        logDebug(`yt-dlp exited with code ${code}`, { error: errorOutput });
+        console.log(`[YTDLP_ERROR] Process failed with code ${code}: ${errorOutput}`);
+        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
       }
 
       // Tìm file đầu ra theo thứ tự ưu tiên
@@ -448,14 +627,14 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
       }
       // 4. Tìm file trong thư mục
       else {
-        logDebug(`[downloadVideo] Fallback: Searching for files in directory: ${outputDir}`, { uniqueId: uniqueId.toString() });
+        console.log(`[YTDLP_FILE_DETECTION] Searching for files in directory: ${outputDir}`);
         try {
           const files = fs.readdirSync(outputDir);
-          logDebug(`[downloadVideo] Files in directory: ${files.join(', ')}`);
+          console.log(`[YTDLP_FILE_DETECTION] Files in directory: ${files.join(', ')}`);
           
           // Tìm file mới nhất trong thư mục bắt đầu bằng uniqueId
           const downloadedFiles = files.filter(file => file.startsWith(uniqueId.toString()));
-          logDebug(`[downloadVideo] Matching files with uniqueId: ${downloadedFiles.join(', ')}`);
+          console.log(`[YTDLP_FILE_DETECTION] Matching files: ${downloadedFiles.join(', ')}`);
           
           if (downloadedFiles.length > 0) {
             // Lấy thông tin về các file
@@ -499,29 +678,25 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
               }
             }
           } else {
-            const errNoMatch = `No matching files found in directory ${outputDir} with prefix ${uniqueId}`;
-            console.error(`[YTDLP_ERROR] ${errNoMatch}`);
-            return reject(new Error(errNoMatch));
+            console.log(`[YTDLP_ERROR] No matching files found in directory`);
+            return reject(new Error('Không tìm thấy file đã tải'));
           }
         } catch (error) {
-          const errReadDir = `Error reading directory ${outputDir}: ${error.message}`;
-          console.error(`[YTDLP_ERROR] ${errReadDir}`);
-          return reject(new Error(errReadDir));
+          console.log(`[YTDLP_ERROR] Error reading directory: ${error.message}`);
+          return reject(new Error(`Lỗi khi đọc thư mục: ${error.message}`));
         }
       }
 
       // Nếu không tìm thấy file nào
       if (!finalOutputFile) {
-        const errNoOutput = `Could not determine output file for URL: ${correctedUrl}, Format: ${effectiveQuality}`;
-        console.error(`[YTDLP_ERROR] ${errNoOutput}`);
-        return reject(new Error(errNoOutput));
+        console.log(`[YTDLP_ERROR] Could not find any output file`);
+        return reject(new Error('Không tìm thấy file đầu ra'));
       }
 
       // Kiểm tra file có tồn tại không
       if (!fs.existsSync(finalOutputFile)) {
-        const errFileNotExist = `Final output file does not exist: ${finalOutputFile}`;
-        console.error(`[YTDLP_ERROR] ${errFileNotExist}`);
-        return reject(new Error(errFileNotExist));
+        console.log(`[YTDLP_ERROR] Final output file does not exist: ${finalOutputFile}`);
+        return reject(new Error(`File không tồn tại: ${finalOutputFile}`));
       }
 
       // Kiểm tra kích thước file và định dạng
@@ -532,12 +707,9 @@ exports.downloadVideo = (url, formatId, outputDir, qualityKey = null) => {
         console.log(`[YTDLP_FILE_INFO] File size: ${formatFileSize(stats.size)} (${stats.size} bytes), Extension: ${fileExt}`);
         
         if (stats.size === 0) {
-          const errZeroSize = `Downloaded file ${finalOutputFile} is 0 bytes. Removing.`;
-          console.error(`[YTDLP_ERROR] ${errZeroSize}`);
-          try {
-            fs.unlinkSync(finalOutputFile);
-          } catch (e) { console.error(`[YTDLP_ERROR] Failed to remove zero-byte file: ${e.message}`); }
-          return reject(new Error(errZeroSize));
+          console.log(`[YTDLP_ERROR] File size is zero, removing empty file`);
+          fs.unlinkSync(finalOutputFile);
+          return reject(new Error('File tải về có kích thước 0 byte'));
         }
         
         // Kiểm tra nếu file không phải là video/audio
@@ -614,10 +786,11 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
     let correctedUrl = url;
     if (url.includes('tiktiktok.com')) {
       correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
-      // console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
     }
     
-    logDebug(`[streamVideoDirectly] Start for URL: ${correctedUrl}`, { formatId, qualityKey });
+    logDebug(`Streaming video directly from URL: ${correctedUrl}`);
+    logDebug(`Format ID/Quality: ${formatId}, Quality Key: ${qualityKey || 'not specified'}`);
     
     // Xác định các tham số tải xuống dựa trên formatId
     let downloadArgs = [];
@@ -777,12 +950,12 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
       ...downloadArgs
     ];
     
-    const commandString = `yt-dlp ${args.join(' ')}`;
+    const commandString = `python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`;
     logDebug(`Command: ${commandString}`);
     console.log(`[YTDLP_STREAM_COMMAND] Executing full command: ${commandString}`);
     
     // Sử dụng spawn với stdio: 'pipe' để có thể truy cập stdout và stderr
-    const ytDlp = spawn('yt-dlp', args, {
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
     
@@ -795,15 +968,13 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
       console.log(`[YTDLP_ERROR] ${error.trim()}`);
     });
     
-    ytDlp.on('error', (processError) => {
-      const errorMessage = `yt-dlp process error for streamVideoDirectly. URL: ${correctedUrl}, Format: ${effectiveQuality}. Error: ${processError.message}`;
-      console.error(`[YTDLP_ERROR] ${errorMessage}`);
-      logDebug('[streamVideoDirectly] Process error details', { error: processError.message, url: correctedUrl, format: effectiveQuality });
-      reject(new Error(errorMessage));
+    ytDlp.on('error', (error) => {
+      logDebug(`yt-dlp process error: ${error.message}`);
+      console.error(`[YTDLP_PROCESS_ERROR] ${error.message}`);
+      reject(error);
     });
     
     // Trả về child process để controller có thể pipe stdout
-    logDebug(`[streamVideoDirectly] Returning yt-dlp process for URL: ${correctedUrl}`);
     resolve(ytDlp);
   });
 };
@@ -814,13 +985,13 @@ exports.streamVideoDirectly = (url, formatId, qualityKey = null) => {
  */
 exports.getSupportedSites = () => {
   return new Promise((resolve, reject) => {
-    logDebug('[getSupportedSites] Start');
+    logDebug('Getting list of supported sites');
     
     const args = [
       '--list-extractors'
     ];
 
-    const ytDlp = spawn('yt-dlp', args);
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
     
     let output = '';
     let errorOutput = '';
@@ -831,16 +1002,13 @@ exports.getSupportedSites = () => {
 
     ytDlp.stderr.on('data', (data) => {
       errorOutput += data.toString();
-      // logDebug(`stderr: ${data.toString()}`); // Can be very verbose
+      logDebug(`stderr: ${data.toString()}`);
     });
 
     ytDlp.on('close', (code) => {
-      logDebug(`[getSupportedSites] yt-dlp process closed with code ${code}`);
       if (code !== 0) {
-        const errorMessage = `yt-dlp exited with code ${code} for getSupportedSites. Stderr: ${errorOutput}`;
-        console.error(`[YTDLP_ERROR] ${errorMessage}`);
-        logDebug('[getSupportedSites] Error details', { error: errorOutput });
-        return reject(new Error(errorMessage));
+        logDebug(`yt-dlp exited with code ${code}`, { error: errorOutput });
+        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
       }
 
       // Xử lý danh sách các trang web
@@ -848,7 +1016,7 @@ exports.getSupportedSites = () => {
         .filter(site => site.trim() !== '')
         .map(site => site.trim());
 
-      logDebug(`[getSupportedSites] Found ${sites.length} supported sites. Success.`);
+      logDebug(`Found ${sites.length} supported sites`);
       resolve(sites);
     });
   });
@@ -865,11 +1033,11 @@ exports.listSubtitles = (url) => {
     let correctedUrl = url;
     if (url.includes('tiktiktok.com')) {
       correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
-      // console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
     }
     
-    logDebug(`[listSubtitles] Start for URL: ${correctedUrl}`);
-    // console.log(`[YTDLP] Listing subtitles for URL: ${correctedUrl}`); // Redundant with logDebug
+    logDebug(`Listing subtitles for URL: ${correctedUrl}`);
+    console.log(`[YTDLP] Listing subtitles for URL: ${correctedUrl}`);
     
     const args = [
       correctedUrl,
@@ -877,10 +1045,10 @@ exports.listSubtitles = (url) => {
       '--no-playlist'
     ];
 
-    logDebug(`Command: yt-dlp ${args.join(' ')}`);
-    console.log(`[YTDLP] Command: yt-dlp ${args.join(' ')}`);
+    logDebug(`Command: python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`);
+    console.log(`[YTDLP] Command: python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`);
     
-    const ytDlp = spawn('yt-dlp', args);
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
     
     let output = '';
     let errorOutput = '';
@@ -898,17 +1066,17 @@ exports.listSubtitles = (url) => {
     });
 
     ytDlp.on('close', (code) => {
-      logDebug(`[listSubtitles] yt-dlp process closed with code ${code} for URL: ${correctedUrl}`);
       if (code !== 0) {
-        // Nếu không có phụ đề, yt-dlp có thể trả về mã lỗi nhưng vẫn là trường hợp thành công (không có phụ đề)
-        if (output.includes('There are no subtitles') || errorOutput.includes('There are no subtitles') || output.includes('has no subtitles')) {
-          logDebug(`[listSubtitles] No subtitles found for URL: ${correctedUrl}`);
+        logDebug(`yt-dlp exited with code ${code}`, { error: errorOutput });
+        console.log(`[YTDLP] yt-dlp exited with code ${code} when listing subtitles`);
+        
+        // Nếu không có phụ đề, yt-dlp có thể trả về mã lỗi nhưng vẫn thành công
+        if (output.includes('There are no subtitles') || errorOutput.includes('There are no subtitles')) {
+          console.log(`[YTDLP] No subtitles found for this video`);
           return resolve([]);
         }
-        const errorMessage = `yt-dlp exited with code ${code} for listSubtitles. URL: ${correctedUrl}. Stderr: ${errorOutput}`;
-        console.error(`[YTDLP_ERROR] ${errorMessage}`);
-        logDebug('[listSubtitles] Error details', { error: errorOutput, url: correctedUrl });
-        return reject(new Error(errorMessage));
+        
+        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
       }
 
       try {
@@ -971,18 +1139,17 @@ exports.listSubtitles = (url) => {
         }
         
         // Kiểm tra nếu không tìm thấy phụ đề trong output
-        if (output.includes('There are no subtitles') || output.includes('has no subtitles') || (!foundSubtitlesSection && subtitles.length === 0)) {
-          logDebug(`[listSubtitles] No subtitles found in output for URL: ${correctedUrl}`);
+        if (output.includes('There are no subtitles') || !foundSubtitlesSection) {
+          console.log(`[YTDLP] No subtitles found in output`);
           return resolve([]);
         }
         
-        logDebug(`[listSubtitles] Found ${subtitles.length} subtitles for URL: ${correctedUrl}. Success.`);
+        console.log(`[YTDLP] Found ${subtitles.length} subtitles`);
+        logDebug(`Found ${subtitles.length} subtitles`);
         resolve(subtitles);
       } catch (error) {
-        const parseErrorMessage = `Failed to parse subtitles list for URL: ${correctedUrl}. Error: ${error.message}`;
-        console.error(`[YTDLP_ERROR] ${parseErrorMessage}`);
-        logDebug('[listSubtitles] Parse error details', { error: error.message, url: correctedUrl });
-        reject(new Error(parseErrorMessage));
+        logDebug('Failed to parse subtitles list', { error: error.message });
+        reject(new Error(`Failed to parse subtitles list: ${error.message}`));
       }
     });
   });
@@ -1003,10 +1170,14 @@ exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFile
     let correctedUrl = url;
     if (url.includes('tiktiktok.com')) {
       correctedUrl = url.replace('tiktiktok.com', 'tiktok.com');
-      // console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
+      console.log(`[YTDLP] Corrected TikTok URL from ${url} to ${correctedUrl}`);
     }
     
-    logDebug(`[downloadSingleSubtitle] Start for URL: ${correctedUrl}`, { lang, format, outputDir, baseFilename });
+    logDebug(`Downloading subtitle for URL: ${correctedUrl}`);
+    console.log(`[YTDLP] Downloading subtitle for URL: ${correctedUrl}`);
+    console.log(`[YTDLP] Language: ${lang}, Format: ${format}`);
+    console.log(`[YTDLP] Output directory: ${outputDir}`);
+    console.log(`[YTDLP] Base filename: ${baseFilename}`);
     
     // Đảm bảo thư mục đầu ra tồn tại
     if (!fs.existsSync(outputDir)) {
@@ -1028,11 +1199,11 @@ exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFile
       '-o', outputPath
     ];
 
-    const commandString = `yt-dlp ${args.join(' ')}`;
+    const commandString = `python ${path.join(YT_DLP_PATH, 'yt_dlp/__main__.py')} ${args.join(' ')}`;
     logDebug(`Command: ${commandString}`);
     console.log(`[YTDLP] Executing command: ${commandString}`);
     
-    const ytDlp = spawn('yt-dlp', args);
+    const ytDlp = spawn('python', [path.join(YT_DLP_PATH, 'yt_dlp/__main__.py'), ...args]);
     
     let output = '';
     let errorOutput = '';
@@ -1060,30 +1231,27 @@ exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFile
     });
 
     ytDlp.on('close', (code) => {
-      logDebug(`[downloadSingleSubtitle] yt-dlp process closed with code ${code} for URL: ${correctedUrl}`);
+      console.log(`[YTDLP] yt-dlp process exited with code ${code}`);
       
       if (code !== 0) {
-        const commonErrorMessages = [
-          'Requested format is not available',
-          'No subtitles found',
-          'no closed captions found' 
-        ];
-        const isNoSubsError = commonErrorMessages.some(msg => errorOutput.toLowerCase().includes(msg) || output.toLowerCase().includes(msg));
-
-        if (isNoSubsError) {
-          const noSubsMessage = `No subtitles available for language ${lang}, format ${format} for URL: ${correctedUrl}`;
-          logDebug(`[downloadSingleSubtitle] ${noSubsMessage}`);
-          return reject(new Error(noSubsMessage));
+        logDebug(`yt-dlp exited with code ${code}`, { error: errorOutput });
+        console.log(`[YTDLP] Error downloading subtitle: ${errorOutput}`);
+        
+        // Kiểm tra nếu lỗi là do không có phụ đề
+        if (errorOutput.includes('Requested format is not available') ||
+            errorOutput.includes('No subtitles found') ||
+            output.includes('Requested format is not available') ||
+            output.includes('No subtitles found')) {
+          console.log(`[YTDLP] No subtitles available for language: ${lang}`);
+          return reject(new Error(`Không có phụ đề ${lang} cho video này`));
         }
         
-        const errorMessage = `yt-dlp exited with code ${code} for downloadSingleSubtitle. URL: ${correctedUrl}, Lang: ${lang}. Stderr: ${errorOutput}`;
-        console.error(`[YTDLP_ERROR] ${errorMessage}`);
-        logDebug('[downloadSingleSubtitle] Error details', { error: errorOutput, url: correctedUrl, lang, format });
-        return reject(new Error(errorMessage));
+        return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
       }
 
       if (!subtitleFile) {
-        logDebug('[downloadSingleSubtitle] Subtitle file not detected from stdout, searching in directory', { outputDir, baseFilename });
+        console.log(`[YTDLP] Subtitle file not detected from stdout, searching in directory`);
+        logDebug('Subtitle file not detected from stdout, searching in directory');
         // Tìm file phụ đề trong thư mục
         try {
           const files = fs.readdirSync(outputDir);
@@ -1105,51 +1273,44 @@ exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFile
             logDebug(`Found subtitle file: ${subtitleFile}`);
             console.log(`[YTDLP] Found subtitle file: ${subtitleFile}`);
           } else {
-            const errNoMatchSub = `No matching subtitle file found in directory ${outputDir} for ${baseFilename}.${lang}.${format}`;
-            logDebug(`[downloadSingleSubtitle] ${errNoMatchSub}`);
-            return reject(new Error(errNoMatchSub));
+            logDebug('No matching subtitle file found in directory');
+            console.log(`[YTDLP] No matching subtitle file found in directory`);
+            return reject(new Error('Không tìm thấy file phụ đề đã tải'));
           }
         } catch (error) {
-          const errReadDirSub = `Error reading directory ${outputDir} for subtitles: ${error.message}`;
-          logDebug(`[downloadSingleSubtitle] ${errReadDirSub}`);
-          return reject(new Error(errReadDirSub));
+          logDebug(`Error reading directory: ${error.message}`);
+          console.log(`[YTDLP] Error reading directory: ${error.message}`);
+          return reject(new Error(`Lỗi khi đọc thư mục: ${error.message}`));
         }
       }
 
       // Kiểm tra file có tồn tại không
       if (!fs.existsSync(subtitleFile)) {
-        const errSubFileNotExist = `Subtitle file does not exist: ${subtitleFile}`;
-        logDebug(`[downloadSingleSubtitle] ${errSubFileNotExist}`);
-        return reject(new Error(errSubFileNotExist));
+        logDebug(`Subtitle file does not exist: ${subtitleFile}`);
+        console.log(`[YTDLP] Subtitle file does not exist: ${subtitleFile}`);
+        return reject(new Error(`File phụ đề không tồn tại: ${subtitleFile}`));
       }
 
       // Kiểm tra kích thước file
       try {
         const stats = fs.statSync(subtitleFile);
-        logDebug(`[downloadSingleSubtitle] Subtitle file size: ${stats.size} bytes for ${subtitleFile}`);
+        console.log(`[YTDLP] Subtitle file size: ${stats.size} bytes`);
         
         if (stats.size === 0) {
-          const errZeroSizeSub = `Subtitle file ${subtitleFile} is empty. Removing.`;
-          logDebug(`[downloadSingleSubtitle] ${errZeroSizeSub}`);
-          try {
-            fs.unlinkSync(subtitleFile);
-          } catch(e) { console.error(`[YTDLP_ERROR] Failed to remove zero-byte subtitle file: ${e.message}`);}
-          return reject(new Error(errZeroSizeSub));
+          console.log(`[YTDLP] Subtitle file is empty, removing it`);
+          fs.unlinkSync(subtitleFile);
+          return reject(new Error('File phụ đề rỗng'));
         }
       } catch (error) {
-        logDebug(`[downloadSingleSubtitle] Error checking subtitle file stats for ${subtitleFile}: ${error.message}`);
-        // Không reject ở đây, có thể file vẫn hợp lệ dù không lấy được stats
+        console.log(`[YTDLP] Error checking subtitle file stats: ${error.message}`);
       }
 
-      logDebug(`[downloadSingleSubtitle] Success: ${subtitleFile}`);
+      logDebug(`Subtitle download completed successfully: ${subtitleFile}`);
+      console.log(`[YTDLP] Subtitle download completed successfully: ${subtitleFile}`);
       resolve(subtitleFile);
     });
   });
 };
-
-// Các hàm formatDuration và formatFileSize được giữ lại ở cuối file
-// vì chúng cũng được sử dụng bởi ytdlpHelper_VideoFormats.js (thông qua bản copy)
-// và việc di chuyển chúng vào một file utils chung sẽ tốt hơn trong tương lai.
 
 /**
  * Định dạng thời lượng video
@@ -1157,7 +1318,7 @@ exports.downloadSingleSubtitle = (url, lang, format = 'srt', outputDir, baseFile
  * @returns {string} - Thời lượng định dạng HH:MM:SS
  */
 function formatDuration(seconds) {
-  if (seconds === null || seconds === undefined || isNaN(seconds)) return 'Unknown';
+  if (!seconds) return 'Unknown';
   
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -1176,7 +1337,7 @@ function formatDuration(seconds) {
  * @returns {string} - Kích thước định dạng với đơn vị phù hợp
  */
 function formatFileSize(bytes) {
-  if (bytes === null || bytes === undefined || isNaN(bytes)) return 'Unknown';
+  if (!bytes) return 'Unknown';
   
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = bytes;
