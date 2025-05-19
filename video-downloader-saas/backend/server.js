@@ -7,6 +7,9 @@ const compression = require('express-compression'); // Thêm compression
 const cookieParser = require('cookie-parser');
 const os = require('os');
 
+// Import system monitor
+const systemMonitor = require('./utils/systemMonitor');
+
 // Import security middleware
 const {
   configureHelmet,
@@ -142,11 +145,18 @@ app.use('/api/admin', adminRoutes); // Thêm routes cho admin
 app.use('/api/settings', settingsRoutes); // Thêm routes cho settings
 app.use('/api/referrals', referralRoutes); // Thêm routes cho referral
 
+// Thêm route health check với độ ưu tiên cao nhất
+app.get('/health', (req, res) => {
+  // Luôn trả về 200 OK, bất kể trạng thái hệ thống
+  res.status(200).send('OK');
+});
+
 // Thêm route cho đường dẫn gốc
 app.get('/', (req, res) => {
   res.json({
     message: 'VideoDownloader SaaS API',
     version: '1.0.0',
+    status: 'healthy',
     endpoints: [
       '/api/auth - Xác thực người dùng',
       '/api/users - Quản lý người dùng',
@@ -183,23 +193,26 @@ const { sequelize: modelsSequelize } = require('./models');
 let redisClient = null;
 let redisConnected = false;
 
-// Thêm route health check rõ ràng
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
-
 // Thử kết nối Redis nếu được cấu hình, nhưng không làm ứng dụng crash nếu không thể kết nối
-if (process.env.REDIS_HOST) {
-  try {
-    const { createClient } = require('redis');
-    
-    // Tạo URL kết nối Redis
-    const redisUrl = process.env.REDIS_PASSWORD
+try {
+  const { createClient } = require('redis');
+  
+  // Sử dụng REDIS_URL nếu có, nếu không thì tạo từ các thành phần
+  let redisUrl = process.env.REDIS_URL;
+  
+  if (!redisUrl && process.env.REDIS_HOST) {
+    redisUrl = process.env.REDIS_PASSWORD
       ? `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
       : `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`;
     
     console.log(`Đang thử kết nối đến Redis tại: ${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`);
-    
+  } else if (redisUrl) {
+    console.log('Đang thử kết nối đến Redis với REDIS_URL');
+  } else {
+    console.log('Không có thông tin kết nối Redis, bỏ qua');
+  }
+  
+  if (redisUrl) {
     // Khởi tạo Redis client
     redisClient = createClient({
       url: redisUrl,
@@ -238,10 +251,10 @@ if (process.env.REDIS_HOST) {
     
     // Xuất Redis client để các module khác có thể sử dụng
     global.redisClient = redisClient;
-  } catch (error) {
-    console.error('Lỗi khi khởi tạo Redis client:', error);
-    // Không làm crash ứng dụng
   }
+} catch (error) {
+  console.error('Lỗi khi khởi tạo Redis client:', error);
+  // Không làm crash ứng dụng
 }
 
 // Khởi động máy chủ
@@ -293,12 +306,39 @@ const startServer = async () => {
   
   // Khởi động máy chủ
   try {
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
       console.log(`Môi trường: ${process.env.NODE_ENV}`);
       console.log(`Hệ điều hành: ${os.platform()} ${os.release()}`);
       console.log(`Database: ${process.env.USE_SQLITE === 'true' ? 'SQLite' : 'PostgreSQL'} (Khởi tạo: ${dbInitialized ? 'Thành công' : 'Thất bại'})`);
       console.log(`Redis: ${redisConnected ? 'Đã kết nối' : 'Không kết nối'}`);
+      
+      // Khởi động giám sát tài nguyên hệ thống
+      systemMonitor.startMonitoring({
+        checkInterval: 30000, // Kiểm tra mỗi 30 giây
+        cpuThreshold: 85,     // Ngưỡng CPU cao hơn (85%)
+        memoryThreshold: 85,  // Ngưỡng bộ nhớ cao hơn (85%)
+        logInterval: 60000    // Log mỗi 1 phút
+      });
+    });
+    
+    // Xử lý tắt máy chủ
+    process.on('SIGTERM', () => {
+      console.log('Nhận tín hiệu SIGTERM, đang tắt máy chủ...');
+      systemMonitor.stopMonitoring();
+      server.close(() => {
+        console.log('Máy chủ đã đóng');
+        process.exit(0);
+      });
+    });
+    
+    process.on('SIGINT', () => {
+      console.log('Nhận tín hiệu SIGINT, đang tắt máy chủ...');
+      systemMonitor.stopMonitoring();
+      server.close(() => {
+        console.log('Máy chủ đã đóng');
+        process.exit(0);
+      });
     });
   } catch (error) {
     console.error('Lỗi khi khởi động máy chủ:', error);
