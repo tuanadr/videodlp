@@ -54,10 +54,11 @@ const app = express();
 app.set('trust proxy', true);
 
 // Middleware bảo mật
-app.use(configureHelmet()); // Thiết lập các HTTP headers bảo mật
-app.use(secureHeaders); // Thiết lập các headers bảo mật bổ sung
+// app.use(configureHelmet()); // Thiết lập các HTTP headers bảo mật
+// app.use(secureHeaders); // Thiết lập các headers bảo mật bổ sung
 
 // CORS configuration
+/*
 app.use(cors({
   origin: function(origin, callback) {
     // Danh sách các origin được phép
@@ -95,6 +96,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
 }));
+*/
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' })); // Giới hạn kích thước body
@@ -124,12 +126,13 @@ app.use('/downloads', express.static(downloadsPath, {
 console.log(`Đã cấu hình thư mục tĩnh cho downloads: ${downloadsPath}`);
 
 // CSRF protection (chỉ áp dụng cho các routes không phải API)
+/*
 if (process.env.NODE_ENV === 'production') {
   app.use('/api', configureCsrf());
   app.use('/api', handleCsrfError);
   app.use('/api', setCsrfToken);
 }
-
+*/
 // Middleware để log các yêu cầu API
 app.use('/api', (req, res, next) => {
   console.log(`API Request: [${req.method}] ${req.originalUrl}`);
