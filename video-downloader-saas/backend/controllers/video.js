@@ -2,17 +2,30 @@ const path = require('path');
 const fs = require('fs');
 const videoService = require('../services/videoService');
 const EnhancedVideoService = require('../services/enhancedVideoService');
+const StreamingMonitorService = require('../services/streamingMonitorService');
 const AnalyticsService = require('../services/analyticsService');
 const AdService = require('../services/adService');
 const ytdlp = require('../utils/ytdlp');
 const { catchAsync } = require('../utils/errorHandler');
 const { getSettings } = require('../utils/settings');
+const { generateSessionId } = require('../utils/sessionUtils');
 const { User, Video } = require('../models');
+
+// Constants
+const SUBTITLE_DIR = path.join(__dirname, '../downloads/subtitles');
 
 // Initialize enhanced services
 const enhancedVideoService = new EnhancedVideoService();
+const streamingMonitor = new StreamingMonitorService();
 const analyticsService = new AnalyticsService();
 const adService = new AdService();
+
+// Start monitoring
+streamingMonitor.startMonitoring();
+
+// Make services globally available for monitoring
+global.streamingService = enhancedVideoService;
+global.ffmpegService = enhancedVideoService.ffmpegService;
 
 /**
  * Lấy thông tin video từ URL với tier restrictions
@@ -277,3 +290,152 @@ function isRedisAvailable() {
     return false;
   }
 }
+
+/**
+ * Stream video with adaptive bitrate (Pro users only)
+ */
+exports.streamAdaptiveBitrate = catchAsync(async (req, res, next) => {
+  const { url, formatId } = req.body;
+  const user = req.user;
+  const sessionId = req.sessionId || generateSessionId();
+
+  // Verify Pro tier
+  const userTier = user ? user.getTier() : 'anonymous';
+  if (userTier !== 'pro') {
+    return res.status(403).json({
+      success: false,
+      message: 'Adaptive bitrate streaming chỉ dành cho Pro users'
+    });
+  }
+
+  // Set response headers for streaming
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Transfer-Encoding', 'chunked');
+  res.setHeader('X-Streaming-Type', 'adaptive-bitrate');
+
+  // Start adaptive bitrate streaming
+  await enhancedVideoService.streamWithAnalytics(
+    url,
+    formatId,
+    user,
+    sessionId,
+    res,
+    { adaptiveBitrate: true }
+  );
+});
+
+/**
+ * Stream video with real-time quality adjustment
+ */
+exports.streamWithQualityAdjustment = catchAsync(async (req, res, next) => {
+  const { url, formatId, initialQuality } = req.body;
+  const user = req.user;
+  const sessionId = req.sessionId || generateSessionId();
+
+  // Verify tier (Free and Pro)
+  const userTier = user ? user.getTier() : 'anonymous';
+  if (userTier === 'anonymous') {
+    return res.status(403).json({
+      success: false,
+      message: 'Real-time quality adjustment không khả dụng cho anonymous users'
+    });
+  }
+
+  // Set response headers for streaming
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Transfer-Encoding', 'chunked');
+  res.setHeader('X-Streaming-Type', 'quality-adjustable');
+  res.setHeader('X-Initial-Quality', initialQuality || 'auto');
+
+  // Start quality adjustable streaming
+  await enhancedVideoService.streamWithAnalytics(
+    url,
+    formatId,
+    user,
+    sessionId,
+    res,
+    {
+      qualityAdjustment: true,
+      initialQuality: initialQuality || 'medium'
+    }
+  );
+});
+
+/**
+ * Get streaming statistics
+ */
+exports.getStreamingStats = catchAsync(async (req, res, next) => {
+  const user = req.user;
+  const userTier = user ? user.getTier() : 'anonymous';
+
+  // Get basic streaming stats
+  const streamingStats = enhancedVideoService.getStreamingStats();
+
+  // Get performance summary
+  const performanceSummary = streamingMonitor.getPerformanceSummary();
+
+  // Filter stats based on user tier
+  let filteredStats = {
+    activeStreams: streamingStats.activeStreams,
+    userTier: userTier
+  };
+
+  // Add more details for authenticated users
+  if (user) {
+    filteredStats = {
+      ...filteredStats,
+      totalStreams: streamingStats.totalStreams,
+      successfulStreams: streamingStats.successfulStreams,
+      averageStreamDuration: streamingStats.averageStreamDuration
+    };
+  }
+
+  // Add admin-level stats for Pro users
+  if (userTier === 'pro') {
+    filteredStats = {
+      ...filteredStats,
+      streamsByTier: streamingStats.streamsByTier,
+      totalDataTransferred: streamingStats.totalDataTransferred,
+      performance: performanceSummary
+    };
+  }
+
+  res.json({
+    success: true,
+    data: filteredStats
+  });
+});
+
+/**
+ * Get streaming monitor data (Admin only)
+ */
+exports.getStreamingMonitor = catchAsync(async (req, res, next) => {
+  const user = req.user;
+
+  // Check if user is admin (you might have different admin check logic)
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Chỉ admin mới có thể truy cập monitoring data'
+    });
+  }
+
+  // Get comprehensive monitoring data
+  const currentMetrics = streamingMonitor.getCurrentMetrics();
+  const performanceHistory = streamingMonitor.getPerformanceHistory(60); // Last hour
+  const performanceSummary = streamingMonitor.getPerformanceSummary();
+  const streamingStats = enhancedVideoService.getStreamingStats();
+  const ffmpegStats = enhancedVideoService.ffmpegService.getTranscodingStats();
+
+  res.json({
+    success: true,
+    data: {
+      currentMetrics,
+      performanceHistory,
+      performanceSummary,
+      streamingStats,
+      ffmpegStats,
+      timestamp: Date.now()
+    }
+  });
+});

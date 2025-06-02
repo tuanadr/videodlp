@@ -10,7 +10,11 @@ const {
   getSupportedSites,
   listSubtitles,
   downloadSubtitle,
-  serveSubtitleFile
+  serveSubtitleFile,
+  streamAdaptiveBitrate,
+  streamWithQualityAdjustment,
+  getStreamingStats,
+  getStreamingMonitor
 } = require('../controllers/video');
 
 const {
@@ -167,7 +171,7 @@ router.post('/stream/adaptive',
   checkFormatRestrictions,
   trackSessionDownloads,
   createTierRateLimiter(),
-  require('../controllers/enhancedVideo').streamAdaptiveBitrate
+  streamAdaptiveBitrate
 );
 
 router.post('/stream/quality-adjust',
@@ -181,20 +185,20 @@ router.post('/stream/quality-adjust',
   checkFormatRestrictions,
   trackSessionDownloads,
   createTierRateLimiter(),
-  require('../controllers/enhancedVideo').streamWithQualityAdjustment
+  streamWithQualityAdjustment
 );
 
 // Streaming analytics and monitoring
 router.get('/stream/stats',
   optionalAuth,
   apiLimiter,
-  require('../controllers/enhancedVideo').getStreamingStats
+  getStreamingStats
 );
 
 router.get('/stream/monitor',
   protect, // Admin only
   apiLimiter,
-  require('../controllers/enhancedVideo').getStreamingMonitor
+  getStreamingMonitor
 );
 
 // Routes yêu cầu xác thực

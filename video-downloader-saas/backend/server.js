@@ -17,9 +17,6 @@ const systemMonitor = require('./utils/systemMonitor');
 // Import security middleware
 const {
   configureHelmet,
-  configureCsrf,
-  handleCsrfError,
-  setCsrfToken,
   secureHeaders
 } = require('./middleware/security');
 
@@ -99,14 +96,14 @@ app.use(cors({
   },
   credentials: true, // Cho phép gửi cookie qua CORS
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' })); // Giới hạn kích thước body
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Cookie parser middleware (cần thiết cho CSRF)
+// Cookie parser middleware
 app.use(cookieParser());
 
 // Compression middleware
@@ -126,14 +123,7 @@ app.use('/downloads', express.static(downloadsPath, {
 }));
 console.log(`Đã cấu hình thư mục tĩnh cho downloads: ${downloadsPath}`);
 
-// CSRF protection (chỉ áp dụng cho các routes không phải API)
-/*
-if (process.env.NODE_ENV === 'production') {
-  app.use('/api', configureCsrf());
-  app.use('/api', handleCsrfError);
-  app.use('/api', setCsrfToken);
-}
-*/
+
 // API request logging middleware
 app.use('/api', (req, res, next) => {
   logger.api(`API Request: ${req.method} ${req.originalUrl}`, {
