@@ -210,6 +210,29 @@ export const AuthProvider = ({ children }) => {
     setUser(prevUser => ({ ...prevUser, ...userData }));
   }, []);
 
+  // Update profile
+  const updateProfile = useCallback(async (profileData) => {
+    try {
+      const response = await axios.put('/api/auth/profile', profileData);
+      setUser(response.data.data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      throw error;
+    }
+  }, []);
+
+  // Update password
+  const updatePassword = useCallback(async (passwordData) => {
+    try {
+      const response = await axios.put('/api/auth/change-password', passwordData);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update password:', error);
+      throw error;
+    }
+  }, []);
+
   // Check if user has specific role
   const hasRole = useCallback((role) => {
     return user?.role === role;
@@ -249,38 +272,129 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user, getUserTier]);
 
-  // Check download limits
+  // Check download permissions (Updated: No download count limits)
   const canDownload = useCallback(() => {
-    const tier = getUserTier();
-    const tierRestrictions = user?.tierRestrictions;
+    // All users can download unlimited times
+    return { allowed: true, reason: null };
+  }, []);
 
-    if (!tierRestrictions) return tier === 'anonymous'; // Anonymous users can download with limits
-
-    if (tierRestrictions.dailyDownloads === -1) return true; // Unlimited
-
-    const currentCount = user?.monthlyDownloadCount || 0;
-    return currentCount < tierRestrictions.dailyDownloads;
-  }, [user, getUserTier]);
-
-  // Get remaining downloads
+  // Get remaining downloads (Updated: Always unlimited)
   const getRemainingDownloads = useCallback(() => {
-    const tier = getUserTier();
-    const tierRestrictions = user?.tierRestrictions;
-
-    if (!tierRestrictions || tierRestrictions.dailyDownloads === -1) {
-      return tier === 'pro' ? 'Unlimited' : 'Unknown';
-    }
-
-    const currentCount = user?.monthlyDownloadCount || 0;
-    const remaining = Math.max(0, tierRestrictions.dailyDownloads - currentCount);
-    return remaining;
-  }, [user, getUserTier]);
+    // All users have unlimited downloads now
+    return 'Unlimited';
+  }, []);
 
   // Check if subscription is expired
   const isSubscriptionExpired = useCallback(() => {
     if (!user?.subscription_expires_at) return false;
     return new Date() > new Date(user.subscription_expires_at);
   }, [user]);
+
+  // Payment-related functions
+  const createPayment = useCallback(async (paymentData) => {
+    try {
+      const { method, amount, months, orderInfo } = paymentData;
+      const endpoint = method === 'vnpay' ? '/api/payments/vnpay/create' : '/api/payments/momo/create';
+
+      const response = await axios.post(endpoint, {
+        amount,
+        months,
+        orderInfo
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Payment creation failed:', error);
+      throw error;
+    }
+  }, []);
+
+  const getPaymentHistory = useCallback(async (page = 1, limit = 10) => {
+    try {
+      const response = await axios.get(`/api/payments/history?page=${page}&limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get payment history:', error);
+      throw error;
+    }
+  }, []);
+
+  // Analytics functions (temporarily disabled to prevent errors)
+  const trackPageView = useCallback(async (page) => {
+    try {
+      // Temporarily disable analytics to prevent errors
+      console.log('Page view tracked:', {
+        page,
+        timestamp: new Date().toISOString()
+      });
+      // await axios.post('/api/analytics/track/page-view', {
+      //   page,
+      //   timestamp: new Date().toISOString()
+      // });
+    } catch (error) {
+      console.error('Failed to track page view:', error);
+    }
+  }, []);
+
+  const trackAdImpression = useCallback(async (adData) => {
+    try {
+      // Temporarily disable analytics to prevent errors
+      console.log('Ad impression tracked:', adData);
+      // await axios.post('/api/analytics/track/ad-impression', adData);
+    } catch (error) {
+      console.error('Failed to track ad impression:', error);
+    }
+  }, []);
+
+  const trackAdClick = useCallback(async (adData) => {
+    try {
+      // Temporarily disable analytics to prevent errors
+      console.log('Ad click tracked:', adData);
+      // await axios.post('/api/analytics/track/ad-click', adData);
+    } catch (error) {
+      console.error('Failed to track ad click:', error);
+    }
+  }, []);
+
+  // Referral functions
+  const applyReferralCode = useCallback(async (referralCode) => {
+    try {
+      const response = await axios.post('/api/referrals/apply', { referralCode });
+
+      // Update user data with bonus downloads
+      if (response.data.success) {
+        setUser(prevUser => ({
+          ...prevUser,
+          bonusDownloads: response.data.data.bonusDownloads
+        }));
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error('Failed to apply referral code:', error);
+      throw error;
+    }
+  }, []);
+
+  const getReferralStats = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/referrals/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get referral stats:', error);
+      throw error;
+    }
+  }, []);
+
+  const getReferralCode = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/referrals/code');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get referral code:', error);
+      throw error;
+    }
+  }, []);
 
   // Get loading state
   const loading = loginMutation.loading || 
@@ -304,15 +418,17 @@ export const AuthProvider = ({ children }) => {
     isInitialized,
     loading,
     error,
-    
+
     // Methods
     login,
     register,
     logout,
     updateUser,
+    updateProfile,
+    updatePassword,
     refetchUser,
     clearAuthTokens,
-    
+
     // Utilities
     hasRole,
     hasPermission,
@@ -323,7 +439,21 @@ export const AuthProvider = ({ children }) => {
     canDownload,
     getRemainingDownloads,
     isSubscriptionExpired,
-    
+
+    // Payment functions
+    createPayment,
+    getPaymentHistory,
+
+    // Analytics functions
+    trackPageView,
+    trackAdImpression,
+    trackAdClick,
+
+    // Referral functions
+    applyReferralCode,
+    getReferralStats,
+    getReferralCode,
+
     // Mutation states for granular loading/error handling
     loginState: {
       loading: loginMutation.loading,

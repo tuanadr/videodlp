@@ -1,17 +1,16 @@
 /**
  * User Tier Configuration
  * Defines restrictions and features for each user tier
+ * Updated for new business model: Unlimited downloads for all tiers
  */
 
 const TIER_RESTRICTIONS = {
   anonymous: {
-    // Download limits
+    // Quality restrictions only
     maxResolution: 1080,
-    dailyDownloads: 5,
-    monthlyDownloads: 5,
     allowedFormats: ['mp4', 'mp3'],
     maxFileSize: 500, // MB
-    
+
     // Features
     showAds: true,
     concurrentDownloads: 1,
@@ -19,61 +18,59 @@ const TIER_RESTRICTIONS = {
     canDownloadPlaylist: false,
     canDownloadSubtitles: false,
     canBatchDownload: false,
-    
+    saveHistory: false, // Updated: No history saving for anonymous users (streaming only)
+
     // Quality restrictions
     maxVideoBitrate: 2000, // kbps
     maxAudioBitrate: 128,  // kbps
-    
+
     // Ad configuration
     adFrequency: 'high', // high, medium, low
     preDownloadAds: true,
     bannerAds: true,
     popupAds: true,
-    
+
     // Rate limiting
     requestsPerMinute: 10,
     requestsPerHour: 100
   },
-  
+
   free: {
-    // Download limits
+    // Quality restrictions only
     maxResolution: 1080,
-    dailyDownloads: 20,
-    monthlyDownloads: 100,
     allowedFormats: ['mp4', 'mp3', 'webm'],
     maxFileSize: 1000, // MB
-    
+
     // Features
     showAds: true,
     concurrentDownloads: 2,
     priority: 'normal',
     canDownloadPlaylist: false,
-    canDownloadSubtitles: true,
+    canDownloadSubtitles: false, // Updated: No subtitles for free users
     canBatchDownload: false,
-    
+    saveHistory: false, // Updated: No history saving for free users (streaming only)
+
     // Quality restrictions
     maxVideoBitrate: 5000, // kbps
     maxAudioBitrate: 256,  // kbps
-    
+
     // Ad configuration
     adFrequency: 'medium',
     preDownloadAds: true,
     bannerAds: true,
     popupAds: false,
-    
+
     // Rate limiting
     requestsPerMinute: 20,
     requestsPerHour: 300
   },
-  
+
   pro: {
-    // Download limits
+    // No quality restrictions
     maxResolution: Infinity, // 4K, 8K unlimited
-    dailyDownloads: Infinity,
-    monthlyDownloads: Infinity,
     allowedFormats: 'all',
     maxFileSize: Infinity,
-    
+
     // Features
     showAds: false,
     concurrentDownloads: 5,
@@ -81,25 +78,26 @@ const TIER_RESTRICTIONS = {
     canDownloadPlaylist: true,
     canDownloadSubtitles: true,
     canBatchDownload: true,
-    
+    saveHistory: true, // Pro users can save download history
+
     // Quality restrictions
     maxVideoBitrate: Infinity,
     maxAudioBitrate: Infinity,
-    
+
     // Ad configuration
     adFrequency: 'none',
     preDownloadAds: false,
     bannerAds: false,
     popupAds: false,
-    
+
     // Rate limiting
     requestsPerMinute: 100,
     requestsPerHour: 1000,
-    
+
     // Exclusive features
     features: [
       'batch_download',
-      'playlist_download', 
+      'playlist_download',
       'subtitle_download',
       'high_quality_audio',
       'priority_support',
@@ -207,15 +205,14 @@ function isResolutionAllowed(tier, height) {
 }
 
 /**
- * Get download limits for tier
+ * Get download limits for tier (Updated: No download count limits)
  */
 function getDownloadLimits(tier) {
   const restrictions = getTierRestrictions(tier);
   return {
-    daily: restrictions.dailyDownloads,
-    monthly: restrictions.monthlyDownloads,
     concurrent: restrictions.concurrentDownloads,
-    maxFileSize: restrictions.maxFileSize
+    maxFileSize: restrictions.maxFileSize,
+    maxResolution: restrictions.maxResolution
   };
 }
 
@@ -245,18 +242,18 @@ function getRateLimitConfig(tier) {
 }
 
 /**
- * Calculate tier upgrade benefits
+ * Calculate tier upgrade benefits (Updated: No download count benefits)
  */
 function getTierUpgradeBenefits(fromTier, toTier) {
   const fromRestrictions = getTierRestrictions(fromTier);
   const toRestrictions = getTierRestrictions(toTier);
-  
+
   return {
-    downloadIncrease: toRestrictions.dailyDownloads - fromRestrictions.dailyDownloads,
     qualityImprovement: toRestrictions.maxResolution > fromRestrictions.maxResolution,
     adRemoval: fromRestrictions.showAds && !toRestrictions.showAds,
     newFeatures: toRestrictions.features || [],
-    concurrentIncrease: toRestrictions.concurrentDownloads - fromRestrictions.concurrentDownloads
+    concurrentIncrease: toRestrictions.concurrentDownloads - fromRestrictions.concurrentDownloads,
+    fileSizeIncrease: toRestrictions.maxFileSize > fromRestrictions.maxFileSize
   };
 }
 

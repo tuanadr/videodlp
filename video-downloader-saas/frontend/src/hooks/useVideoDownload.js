@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useMutation } from './useApi';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextV2';
 import { toast } from 'react-toastify';
 
 /**

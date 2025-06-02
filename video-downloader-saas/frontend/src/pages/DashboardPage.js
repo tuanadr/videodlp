@@ -1,65 +1,117 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextV2';
 import ReferralWidget from '../components/dashboard/ReferralWidget';
+import TierBadge from '../components/ui/TierBadge';
+import PaymentStatus from '../components/payment/PaymentStatus';
+import BannerAd from '../components/ads/BannerAd';
 
 const DashboardPage = () => {
-  const { user } = useAuth();
+  const { user, getUserTier, trackPageView, getRemainingDownloads, isSubscriptionExpired } = useAuth();
+
+  const currentTier = getUserTier();
+  const remainingDownloads = getRemainingDownloads();
+  const isExpired = isSubscriptionExpired();
+
+  // Track page view
+  useEffect(() => {
+    trackPageView('dashboard');
+  }, [trackPageView]);
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      {/* Thông tin tài khoản */}
+      {/* Banner Ad for non-Pro users */}
+      {currentTier !== 'pro' && (
+        <div className="px-4 mb-6 sm:px-0">
+          <BannerAd position="dashboard" />
+        </div>
+      )}
+
       <div className="px-4 py-6 sm:px-0">
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
-          <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-            <div>
-              <h2 className="text-lg leading-6 font-medium text-gray-900">
-                Thông tin tài khoản
-              </h2>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Thông tin cá nhân và chi tiết gói đăng ký của bạn.
-              </p>
-            </div>
-            <Link
-              to="/dashboard/profile"
-              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            >
-              Chỉnh sửa
-            </Link>
-          </div>
-          <div className="border-t border-gray-200">
-            <dl>
-              <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Họ tên</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user?.name}</dd>
+        {/* Dashboard Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Main Account Info */}
+          <div className="lg:col-span-2">
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+              <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg leading-6 font-medium text-gray-900">
+                    Thông tin tài khoản
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                    Thông tin cá nhân và chi tiết gói đăng ký của bạn.
+                  </p>
+                </div>
+                <Link
+                  to="/dashboard/profile"
+                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  Chỉnh sửa
+                </Link>
               </div>
-              <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Email</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user?.email}</dd>
-              </div>
-              <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Gói đăng ký</dt>
-                <dd className="mt-1 text-sm sm:mt-0 sm:col-span-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    user?.subscription === 'premium' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {user?.subscription === 'premium' ? 'Premium' : 'Miễn phí'}
-                  </span>
-                  {user?.subscription !== 'premium' && (
-                    <Link
-                      to="/dashboard/subscription"
-                      className="ml-3 text-sm font-medium text-primary-600 hover:text-primary-500"
-                    >
-                      Nâng cấp lên Premium
-                    </Link>
+              <div className="border-t border-gray-200">
+                <dl>
+                  <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt className="text-sm font-medium text-gray-500">Họ tên</dt>
+                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user?.name}</dd>
+                  </div>
+                  <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt className="text-sm font-medium text-gray-500">Email</dt>
+                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user?.email}</dd>
+                  </div>
+                  <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt className="text-sm font-medium text-gray-500">Tier hiện tại</dt>
+                    <dd className="mt-1 text-sm sm:mt-0 sm:col-span-2 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <TierBadge tier={currentTier} />
+                        {currentTier === 'pro' && isExpired && (
+                          <span className="text-xs text-red-600 font-medium">(Đã hết hạn)</span>
+                        )}
+                      </div>
+                      {currentTier !== 'pro' && (
+                        <Link
+                          to="/upgrade"
+                          className="text-sm font-medium text-purple-600 hover:text-purple-500"
+                        >
+                          Nâng cấp Pro
+                        </Link>
+                      )}
+                      {currentTier === 'pro' && isExpired && (
+                        <Link
+                          to="/upgrade"
+                          className="text-sm font-medium text-orange-600 hover:text-orange-500"
+                        >
+                          Gia hạn ngay
+                        </Link>
+                      )}
+                    </dd>
+                  </div>
+
+                  {user?.subscription_expires_at && (
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">Hết hạn</dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {new Date(user.subscription_expires_at).toLocaleDateString('vi-VN')}
+                      </dd>
+                    </div>
                   )}
-                </dd>
+                  {user?.bonusDownloads > 0 && (
+                    <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">Lượt thưởng</dt>
+                      <dd className="mt-1 text-sm text-green-600 font-medium sm:mt-0 sm:col-span-2">
+                        +{user.bonusDownloads} lượt
+                      </dd>
+                    </div>
+                  )}
+                </dl>
               </div>
-              <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Số lượt tải xuống</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user?.downloadCount || 0}</dd>
-              </div>
-            </dl>
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Payment Status */}
+            <PaymentStatus />
           </div>
         </div>
 

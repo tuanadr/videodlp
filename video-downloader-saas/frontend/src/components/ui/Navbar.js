@@ -1,15 +1,28 @@
 import React, { useState, useContext } from 'react'; // Import useContext
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextV2';
 import { useSupportedSites } from '../../context/SupportedSitesContext'; // Import useSupportedSites
+import TierBadge from './TierBadge';
+import Button from './Button';
+import {
+  ChevronDownIcon,
+  Bars3Icon,
+  XMarkIcon,
+  UserIcon,
+  ArrowDownTrayIcon,
+  SparklesIcon
+} from '@heroicons/react/24/outline';
 
 const Navbar = () => {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, getUserTier, isSubscriptionExpired } = useAuth();
   const { sites: supportedSites, loading: sitesLoading } = useSupportedSites(); // Use SupportedSitesContext
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isQuickToolsOpen, setIsQuickToolsOpen] = useState(false);
+
+  const currentTier = getUserTier();
+  const isExpired = isSubscriptionExpired();
 
   const handleLogout = async () => {
     await logout();
@@ -17,63 +30,71 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white shadow">
+    <nav className="bg-white shadow-lg border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link to="/" className="text-2xl font-bold text-primary-600">
-                VideoDownloader
+              <Link to="/" className="flex items-center space-x-2">
+                <div className="h-8 w-8 bg-gradient-to-r from-primary-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <ArrowDownTrayIcon className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">
+                  TaiVideoNhanh
+                </span>
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
               <Link
                 to="/"
-                className="border-transparent text-gray-500 hover:border-primary-500 hover:text-primary-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                className="border-transparent text-gray-600 hover:border-primary-500 hover:text-primary-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
               >
                 Trang chủ
               </Link>
               <Link
                 to="/supported-sites"
-                className="border-transparent text-gray-500 hover:border-primary-500 hover:text-primary-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                className="border-transparent text-gray-600 hover:border-primary-500 hover:text-primary-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
               >
                 Trang web hỗ trợ
                 {!sitesLoading && supportedSites && supportedSites.length > 0 && (
-                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                    {supportedSites.length}
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-primary-100 to-purple-100 text-primary-800 border border-primary-200">
+                    {supportedSites.length}+
                   </span>
                 )}
               </Link>
-              <div 
+              <div
                 className="relative inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium"
                 onMouseEnter={() => setIsQuickToolsOpen(true)}
                 onMouseLeave={() => setIsQuickToolsOpen(false)}
               >
                 <button
                   type="button"
-                  className="text-gray-500 inline-flex items-center text-sm font-medium hover:text-primary-700 focus:outline-none"
+                  className="text-gray-600 inline-flex items-center text-sm font-medium hover:text-primary-700 focus:outline-none transition-colors duration-200"
                 >
                   Công cụ tải nhanh
-                  <svg className="ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
+                  <ChevronDownIcon className="ml-1 h-4 w-4" />
                 </button>
                 {isQuickToolsOpen && (
-                  <div className="origin-top-right absolute right-0 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 top-full"> {/* Removed mt-2, Added top-full to position below button */}
-                    <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                      <Link to="/tai-video-youtube" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
+                  <div className="origin-top-right absolute right-0 w-56 rounded-lg shadow-xl bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 top-full border border-gray-100">
+                    <div className="py-2" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                      <Link to="/tai-video-youtube" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:text-red-700 transition-all duration-200" role="menuitem">
+                        <span className="mr-3 text-red-500">📺</span>
                         Tải Video YouTube
                       </Link>
-                      <Link to="/tai-video-facebook" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
+                      <Link to="/tai-video-facebook" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-blue-100 hover:text-blue-700 transition-all duration-200" role="menuitem">
+                        <span className="mr-3 text-blue-500">📘</span>
                         Tải Video Facebook
                       </Link>
-                      <Link to="/tai-video-tiktok" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
+                      <Link to="/tai-video-tiktok" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-pink-50 hover:to-pink-100 hover:text-pink-700 transition-all duration-200" role="menuitem">
+                        <span className="mr-3 text-pink-500">🎵</span>
                         Tải Video TikTok
                       </Link>
-                      <Link to="/tai-video-instagram" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
+                      <Link to="/tai-video-instagram" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-purple-50 hover:to-purple-100 hover:text-purple-700 transition-all duration-200" role="menuitem">
+                        <span className="mr-3 text-purple-500">📷</span>
                         Tải Video Instagram
                       </Link>
-                      <Link to="/tai-nhac-soundcloud" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
+                      <Link to="/tai-nhac-soundcloud" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-orange-50 hover:to-orange-100 hover:text-orange-700 transition-all duration-200" role="menuitem">
+                        <span className="mr-3 text-orange-500">🎧</span>
                         Tải Nhạc SoundCloud
                       </Link>
                     </div>
@@ -126,9 +147,13 @@ const Navbar = () => {
                     <div className="px-4 py-2 text-sm text-gray-700 border-b">
                       <p className="font-medium">{user?.name}</p>
                       <p className="text-xs text-gray-500">{user?.email}</p>
-                      <p className="text-xs mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {user?.subscription === 'premium' ? 'Premium' : 'Miễn phí'}
-                      </p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <TierBadge tier={currentTier} className="text-xs" />
+                        {currentTier === 'pro' && isExpired && (
+                          <span className="text-xs text-red-600 font-medium">Hết hạn</span>
+                        )}
+                      </div>
+
                     </div>
                     <Link
                       to="/dashboard/profile"
@@ -154,6 +179,26 @@ const Navbar = () => {
                     >
                       Mời bạn bè
                     </Link>
+                    {currentTier !== 'pro' && (
+                      <Link
+                        to="/upgrade"
+                        className="block px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 font-medium"
+                        role="menuitem"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        🚀 Nâng cấp Pro
+                      </Link>
+                    )}
+                    {currentTier === 'pro' && isExpired && (
+                      <Link
+                        to="/upgrade"
+                        className="block px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 font-medium"
+                        role="menuitem"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        🔄 Gia hạn Pro
+                      </Link>
+                    )}
                     <button
                       onClick={() => {
                         setIsProfileOpen(false);
@@ -168,17 +213,18 @@ const Navbar = () => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3">
                 <Link
                   to="/login"
-                  className="text-gray-500 hover:text-primary-600 font-medium"
+                  className="text-gray-600 hover:text-primary-600 font-medium transition-colors duration-200"
                 >
                   Đăng nhập
                 </Link>
                 <Link
                   to="/register"
-                  className="btn btn-primary"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-md"
                 >
+                  <SparklesIcon className="h-4 w-4 mr-1" />
                   Đăng ký
                 </Link>
               </div>
@@ -187,41 +233,19 @@ const Navbar = () => {
           <div className="-mr-2 flex items-center sm:hidden">
             <button
               type="button"
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+              className="inline-flex items-center justify-center p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500 transition-all duration-200"
               aria-expanded="false"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               <span className="sr-only">Mở menu chính</span>
-              <svg
+              <Bars3Icon
                 className={`${isMenuOpen ? 'hidden' : 'block'} h-6 w-6`}
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
                 aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-              <svg
+              />
+              <XMarkIcon
                 className={`${isMenuOpen ? 'block' : 'hidden'} h-6 w-6`}
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
                 aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              />
             </button>
           </div>
         </div>

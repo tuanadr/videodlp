@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextV2';
 
 const ProfilePage = () => {
   const { user, updateProfile, updatePassword, error } = useAuth();

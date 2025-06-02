@@ -1,191 +1,164 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextV2';
 import { useSettings } from '../../context/SettingsContext';
-import axios from 'axios';
+import TierBadge from './TierBadge';
+import SubscriptionInfo from './SubscriptionInfo';
 
 const UserLimitsInfo = () => {
-  const { user } = useAuth();
+  const { user, getUserTier, getRemainingDownloads, isSubscriptionExpired } = useAuth();
   const { settings } = useSettings();
-  const [userStats, setUserStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  // Lấy thông tin về số lượt tải xuống đã sử dụng
-  useEffect(() => {
-    const fetchUserStats = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+  const currentTier = getUserTier();
+  const remainingDownloads = getRemainingDownloads();
+  const isExpired = isSubscriptionExpired();
 
-      try {
-        const res = await axios.get('/api/users/stats');
-        setUserStats(res.data.data);
-        setLoading(false);
-      } catch (err) {
-        console.error('Lỗi khi lấy thông tin người dùng:', err);
-        setError('Không thể lấy thông tin người dùng');
-        setLoading(false);
-      }
-    };
-
-    fetchUserStats();
-  }, [user]);
-
-  // Xác định giới hạn tải xuống dựa trên loại người dùng
-  const getDownloadLimit = () => {
-    if (!user) {
-      return settings.anonymousDownloadsPerDay || 10;
+  // Get tier-specific limits (Updated: No download count limits)
+  const getTierLimits = () => {
+    switch (currentTier) {
+      case 'anonymous':
+        return {
+          maxResolution: '1080p',
+          hasAds: true,
+          saveHistory: false
+        };
+      case 'free':
+        return {
+          maxResolution: '1080p',
+          hasAds: true,
+          saveHistory: false // Updated: Free users don't save history (streaming only)
+        };
+      case 'pro':
+        return {
+          maxResolution: '4K/8K',
+          hasAds: false,
+          saveHistory: true,
+          playlist: true,
+          subtitles: true
+        };
+      default:
+        return {
+          maxResolution: 'Unknown',
+          hasAds: true,
+          saveHistory: false
+        };
     }
-    
-    if (user.subscription === 'premium') {
-      return settings.premiumDownloadsPerDay || -1; // -1 = không giới hạn
-    }
-    
-    return settings.freeDownloadsPerDay || 20;
   };
 
-  // Xác định số lượt tải xuống đã sử dụng
-  const getUsedDownloads = () => {
-    if (!user || !userStats) {
-      return 0;
-    }
-    
-    return userStats.dailyDownloadCount || 0;
-  };
+  const tierLimits = getTierLimits();
 
-  // Xác định số lượt tải xuống còn lại
-  const getRemainingDownloads = () => {
-    const limit = getDownloadLimit();
-    if (limit === -1) {
-      return 'Không giới hạn';
-    }
-    
-    const used = getUsedDownloads();
-    return Math.max(0, limit - used);
-  };
-
-  // Tính phần trăm lượt tải đã sử dụng
-  const getDownloadPercentage = () => {
-    const limit = getDownloadLimit();
-    if (limit === -1) {
-      return 0; // Không hiển thị thanh tiến trình cho người dùng premium
-    }
-    
-    const used = getUsedDownloads();
-    return Math.min(100, (used / limit) * 100);
-  };
-
-  // Kiểm tra xem có nên hiển thị gợi ý nâng cấp không
+  // Kiểm tra xem có nên hiển thị gợi ý nâng cấp không (Updated: No download limits)
   const shouldShowUpgradePrompt = () => {
-    if (!user || user.subscription === 'premium') {
+    if (!user || currentTier === 'pro') {
       return false;
     }
-    
-    const percentage = getDownloadPercentage();
-    return percentage >= 80; // Hiển thị khi đã sử dụng 80% trở lên
-  };
 
-  // Lấy thông tin về giới hạn độ phân giải
-  const getResolutionLimit = () => {
-    if (!user) {
-      return '1080p';
-    }
-    
-    if (user.subscription === 'premium') {
-      return '4K (2160p)';
-    }
-    
-    return '720p';
+    // Hiển thị gợi ý nâng cấp dựa trên tier hiện tại
+    return currentTier === 'anonymous' || currentTier === 'free';
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      {/* Tiêu đề */}
-      <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <div className="mb-3 sm:mb-0">
-            <span className="text-sm font-medium text-gray-700">Gói hiện tại:</span>
-            <span className={`ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-              user?.subscription === 'premium' ? 'bg-green-100 text-green-800' : user ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-            }`}>
-              {user?.subscription === 'premium' ? 'Premium' : user ? 'Miễn phí' : 'Chưa đăng nhập'}
-            </span>
-          </div>
-          
-          {user && user.subscription !== 'premium' && (
-            <Link
-              to="/dashboard/subscription"
-              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px] min-w-[140px]"
-            >
-              <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
-              Nâng cấp lên Premium
-            </Link>
-          )}
-          
-          {!user && (
+    <div className="space-y-4">
+      {/* Main Subscription Info */}
+      <SubscriptionInfo />
+
+      {/* Quick Actions for non-authenticated users */}
+      {!user && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="mb-3 sm:mb-0">
+              <h3 className="text-sm font-medium text-blue-900">
+                Đăng ký để có thêm tính năng!
+              </h3>
+              <p className="text-sm text-blue-700">
+                Nâng cấp lên Pro để có chất lượng 4K/8K và không có quảng cáo
+              </p>
+            </div>
             <div className="flex space-x-2">
               <Link
                 to="/login"
-                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px]"
+                className="inline-flex items-center justify-center px-4 py-2 border border-blue-300 text-sm font-medium rounded-md shadow-sm text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]"
               >
                 Đăng nhập
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 min-h-[44px]"
+                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]"
               >
-                Đăng ký
+                Đăng ký miễn phí
               </Link>
             </div>
-          )}
+          </div>
         </div>
-      </div>
-      
-      {/* Thông tin giới hạn */}
-      <div className="px-4 py-4 sm:px-6">
-        {/* Thanh tiến trình lượt tải */}
-        {user && getDownloadLimit() !== -1 && (
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-sm font-medium text-gray-700">Lượt tải còn lại hôm nay</span>
-              <span className="text-sm font-medium text-gray-700">{getUsedDownloads()} / {getDownloadLimit()}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div 
-                className={`h-2.5 rounded-full ${
-                  getDownloadPercentage() >= 90 ? 'bg-red-600' : 
-                  getDownloadPercentage() >= 70 ? 'bg-yellow-500' : 
-                  'bg-green-600'
-                }`} 
-                style={{ width: `${getDownloadPercentage()}%` }}
-              ></div>
-            </div>
-            {userStats?.bonusDownloads > 0 && (
-              <div className="mt-1 text-xs text-gray-600">
-                + {userStats.bonusDownloads} lượt tải thưởng từ giới thiệu bạn bè
+      )}
+
+      {/* Tier Comparison */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-900">
+              So sánh các gói
+            </h3>
+            <button
+              onClick={() => setShowUpgradeModal(true)}
+              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+            >
+              Xem chi tiết
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Comparison Grid */}
+        <div className="px-4 py-4 sm:px-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Anonymous */}
+            <div className={`p-3 rounded-lg border ${currentTier === 'anonymous' ? 'border-gray-400 bg-gray-50' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-2">
+                <TierBadge tier="anonymous" />
+                {currentTier === 'anonymous' && (
+                  <span className="text-xs text-green-600 font-medium">Hiện tại</span>
+                )}
               </div>
-            )}
-          </div>
-        )}
-        
-        {/* Bảng so sánh giới hạn */}
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div className="text-sm font-medium text-gray-700 mb-2">Lượt tải xuống</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {getDownloadLimit() === -1 ? 'Không giới hạn' : `${getDownloadLimit()} lượt/ngày`}
+              <div className="space-y-1 text-xs text-gray-600">
+                <div>Không giới hạn</div>
+                <div>Tối đa 1080p</div>
+                <div>Có quảng cáo</div>
+              </div>
             </div>
-          </div>
-          
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div className="text-sm font-medium text-gray-700 mb-2">Độ phân giải tối đa</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {getResolutionLimit()}
+
+            {/* Free */}
+            <div className={`p-3 rounded-lg border ${currentTier === 'free' ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-2">
+                <TierBadge tier="free" />
+                {currentTier === 'free' && (
+                  <span className="text-xs text-green-600 font-medium">Hiện tại</span>
+                )}
+              </div>
+              <div className="space-y-1 text-xs text-gray-600">
+                <div>Không giới hạn</div>
+                <div>Tối đa 1080p</div>
+                <div>Có quảng cáo</div>
+                <div>Không lưu lịch sử</div>
+              </div>
+            </div>
+
+            {/* Pro */}
+            <div className={`p-3 rounded-lg border ${currentTier === 'pro' ? 'border-purple-400 bg-purple-50' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-2">
+                <TierBadge tier="pro" />
+                {currentTier === 'pro' && !isExpired && (
+                  <span className="text-xs text-green-600 font-medium">Hiện tại</span>
+                )}
+                {currentTier === 'pro' && isExpired && (
+                  <span className="text-xs text-red-600 font-medium">Hết hạn</span>
+                )}
+              </div>
+              <div className="space-y-1 text-xs text-gray-600">
+                <div>Không giới hạn</div>
+                <div>4K/8K</div>
+                <div>Không quảng cáo</div>
+              </div>
             </div>
           </div>
         </div>
@@ -201,7 +174,7 @@ const UserLimitsInfo = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  <span className="font-bold">Bạn sắp hết lượt tải xuống hôm nay!</span> Nâng cấp lên Premium để có lượt tải không giới hạn, độ phân giải cao hơn và nhiều tính năng khác.
+                  <span className="font-bold">Nâng cấp lên Pro để có trải nghiệm tốt hơn!</span> Tải video chất lượng 4K/8K, không có quảng cáo và nhiều tính năng độc quyền khác.
                 </p>
                 <div className="mt-2">
                   <button
@@ -249,10 +222,13 @@ const UserLimitsInfo = () => {
                                       Tính năng
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Khách
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                       Miễn phí
                                     </th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-primary-50">
-                                      Premium
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-purple-50">
+                                      Pro
                                     </th>
                                   </tr>
                                 </thead>
@@ -262,9 +238,12 @@ const UserLimitsInfo = () => {
                                       Lượt tải xuống
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                      {settings.freeDownloadsPerDay || 20} lượt/ngày
+                                      Không giới hạn
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-primary-50 font-medium">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      Không giới hạn
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50 font-medium">
                                       Không giới hạn
                                     </td>
                                   </tr>
@@ -273,22 +252,30 @@ const UserLimitsInfo = () => {
                                       Độ phân giải tối đa
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                      720p
+                                      1080p
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-primary-50 font-medium">
-                                      4K (2160p)
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      1080p
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50 font-medium">
+                                      4K/8K
                                     </td>
                                   </tr>
                                   <tr>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                      Ưu tiên hàng đợi
+                                      Lưu lịch sử
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                       <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                                       </svg>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-primary-50 font-medium">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                      </svg>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50 font-medium">
                                       <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                       </svg>
@@ -301,7 +288,10 @@ const UserLimitsInfo = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                       Có
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-primary-50 font-medium">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      Có
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50 font-medium">
                                       Không
                                     </td>
                                   </tr>
@@ -312,8 +302,11 @@ const UserLimitsInfo = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                       Miễn phí
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-primary-50 font-medium">
-                                      {settings.premiumPrice?.toLocaleString() || '199,000'}đ/tháng
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      Miễn phí
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50 font-medium">
+                                      99,000đ/tháng
                                     </td>
                                   </tr>
                                 </tbody>
@@ -328,10 +321,10 @@ const UserLimitsInfo = () => {
               </div>
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <Link
-                  to="/dashboard/subscription"
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  to="/upgrade"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-purple-600 text-base font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:ml-3 sm:w-auto sm:text-sm"
                 >
-                  Nâng cấp lên Premium
+                  Nâng cấp Pro
                 </Link>
                 <button
                   type="button"

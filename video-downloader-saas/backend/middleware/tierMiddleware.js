@@ -43,45 +43,29 @@ const checkTierRestrictions = (requiredAction = null) => {
 };
 
 /**
- * Middleware to check download limits
+ * Middleware to check download limits (Updated: No download count limits)
  */
 const checkDownloadLimits = async (req, res, next) => {
   try {
-    const userTier = req.userTier || 'anonymous';
     const user = req.user;
 
     if (user) {
-      // Check if user can download
+      // Only check if user account is active
       if (!user.canDownload()) {
-        const restrictions = getTierRestrictions(userTier);
-        return res.status(429).json({
+        return res.status(403).json({
           success: false,
-          message: `Đã đạt giới hạn tải xuống hàng ngày (${restrictions.dailyDownloads} lượt)`,
-          limit: restrictions.dailyDownloads,
-          current: user.monthly_download_count,
-          resetTime: getNextResetTime()
-        });
-      }
-    } else if (userTier === 'anonymous') {
-      // For anonymous users, check session-based limits
-      const sessionDownloads = req.session?.downloadCount || 0;
-      const restrictions = getTierRestrictions('anonymous');
-      
-      if (sessionDownloads >= restrictions.dailyDownloads) {
-        return res.status(429).json({
-          success: false,
-          message: `Đã đạt giới hạn tải xuống cho người dùng ẩn danh (${restrictions.dailyDownloads} lượt)`,
-          suggestion: 'Vui lòng đăng ký tài khoản để tăng giới hạn tải xuống'
+          message: 'Tài khoản của bạn đã bị vô hiệu hóa'
         });
       }
     }
 
+    // No download count limits - all users can download unlimited times
     next();
   } catch (error) {
-    console.error('Error checking download limits:', error);
+    console.error('Error checking download permissions:', error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi hệ thống khi kiểm tra giới hạn tải xuống'
+      message: 'Lỗi hệ thống khi kiểm tra quyền tải xuống'
     });
   }
 };
@@ -176,21 +160,22 @@ const injectAds = async (req, res, next) => {
 };
 
 /**
- * Middleware to track session downloads for anonymous users
+ * Middleware to track session downloads for anonymous users (Updated: For analytics only)
  */
 const trackSessionDownloads = (req, res, next) => {
   if (!req.user) {
-    // Initialize session download count
+    // Initialize session download count for analytics only
     if (!req.session.downloadCount) {
       req.session.downloadCount = 0;
     }
-    
-    // Increment on download endpoints
+
+    // Increment on download endpoints for analytics tracking
     if (req.path.includes('/download') || req.path.includes('/stream')) {
       req.session.downloadCount += 1;
     }
   }
-  
+
+  // Continue without any restrictions
   next();
 };
 

@@ -54,25 +54,28 @@
 
 ## 🎯 Key Features Implemented
 
-### Tier System
+### Tier System (Updated Business Model)
 ```javascript
 // Anonymous Users
-- 5 downloads/day
+- Unlimited downloads
 - Max 1080p resolution
 - Show ads
 - Basic formats only
+- No history saving (streaming only)
 
-// Free Users  
-- 20 downloads/month
+// Free Users
+- Unlimited downloads
 - Max 1080p resolution
 - Show ads
 - Extended formats
+- No history saving (streaming only)
 
 // Pro Users
 - Unlimited downloads
 - Unlimited resolution
 - No ads
 - All features enabled
+- History saving available
 ```
 
 ### Analytics Tracking

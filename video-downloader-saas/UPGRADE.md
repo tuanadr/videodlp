@@ -2,9 +2,9 @@
 
 ## 📋 Tóm tắt công việc đã hoàn thành
 
-### ✅ **1. Hệ thống Tier (3 cấp độ)**
-- **Anonymous Tier**: 3 downloads/ngày, chất lượng tối đa 720p, có quảng cáo
-- **Free Tier**: 10 downloads/tháng, chất lượng tối đa 1080p, có quảng cáo, lưu lịch sử
+### ✅ **1. Hệ thống Tier (3 cấp độ) - Updated Business Model**
+- **Anonymous Tier**: Unlimited downloads, chất lượng tối đa 1080p, có quảng cáo, streaming trực tiếp
+- **Free Tier**: Unlimited downloads, chất lượng tối đa 1080p, có quảng cáo, streaming trực tiếp
 - **Pro Tier**: Unlimited downloads, 4K/8K, không quảng cáo, tất cả tính năng premium
 
 ### ✅ **2. Hệ thống Thanh toán**

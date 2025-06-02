@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextV2';
 import { useSettings } from '../context/SettingsContext';
+import { useAnalytics } from '../components/analytics/AnalyticsTracker';
 import { Link } from 'react-router-dom';
-import UserLimitsInfo from '../components/ui/UserLimitsInfo';
+import PreDownloadAd from '../components/ads/PreDownloadAd';
 
 const VideoDownloadPage = () => {
-  const { user } = useAuth();
+  const { user, getUserTier, canDownload, trackPageView } = useAuth();
   const { settings } = useSettings();
+  const { trackDownloadStart, trackDownloadComplete } = useAnalytics();
   const [url, setUrl] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState('');
@@ -19,13 +21,21 @@ const VideoDownloadPage = () => {
   const [activeTab, setActiveTab] = useState('videoAudio'); // 'videoAudio', 'videoOnly', 'audioOnly'
   const [showFormatDetails, setShowFormatDetails] = useState(false);
   const [currentFormatType, setCurrentFormatType] = useState('video'); // 'video' hoặc 'audio'
-  
+  const [showPreDownloadAd, setShowPreDownloadAd] = useState(false);
+
   // State cho phụ đề
   const [subtitles, setSubtitles] = useState([]);
   const [loadingSubtitles, setLoadingSubtitles] = useState(false);
   const [showSubtitlesModal, setShowSubtitlesModal] = useState(false);
   const [selectedSubtitle, setSelectedSubtitle] = useState(null);
   const [subtitleError, setSubtitleError] = useState(null);
+
+  const currentTier = getUserTier();
+
+  // Track page view
+  useEffect(() => {
+    trackPageView('video-download');
+  }, [trackPageView]);
 
   const handleUrlChange = useCallback((e) => {
     setUrl(e.target.value);
@@ -122,18 +132,36 @@ const VideoDownloadPage = () => {
       setError('Vui lòng nhập URL video');
       return;
     }
-    
+
     if (!selectedFormat) {
       setError('Vui lòng chọn định dạng video');
       return;
     }
-    
+
+    // Check download permissions
+    const canDownloadResult = canDownload();
+    if (!canDownloadResult.allowed) {
+      setError(canDownloadResult.reason);
+      return;
+    }
+
+    // Show pre-download ad for non-Pro users
+    if (currentTier !== 'pro') {
+      setShowPreDownloadAd(true);
+      return;
+    }
+
+    await performDownload();
+  }, [url, selectedFormat, canDownload, currentTier]);
+
+  const performDownload = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+    setShowPreDownloadAd(false);
+
     // Tìm định dạng được chọn để lấy thông tin qualityKey
     const selectedFormatObj = videoInfo?.formats?.find(format => format.format_id === selectedFormat);
-    
+
     // Tạo payload cho yêu cầu tải xuống
     const payload = {
       url: url, // Sử dụng URL gốc mà người dùng đã nhập
@@ -142,12 +170,16 @@ const VideoDownloadPage = () => {
       formatType: currentFormatType, // Thêm thông tin về loại định dạng (video hoặc audio)
       qualityKey: selectedFormatObj?.qualityKey || '' // Thêm qualityKey để backend có thể xác định độ phân giải
     };
-    
+
     // Log payload để debug
     console.log('Download request payload:', payload);
     console.log('Current format type:', currentFormatType);
     console.log('Selected format details:', selectedFormatObj);
-    
+
+    // Track download start
+    const downloadStartTime = Date.now();
+    await trackDownloadStart(url, selectedFormat);
+
     try {
       console.log('Starting direct stream download with format:', selectedFormat);
       
@@ -202,7 +234,11 @@ const VideoDownloadPage = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       setLoading(false);
-      
+
+      // Track download completion
+      const downloadDuration = Date.now() - downloadStartTime;
+      await trackDownloadComplete(url, selectedFormat, downloadDuration);
+
     } catch (error) {
       console.error('Lỗi khi tải video:', error);
       // Log chi tiết lỗi để debug
@@ -216,7 +252,7 @@ const VideoDownloadPage = () => {
       );
       setLoading(false);
     }
-  }, [url, selectedFormat, videoInfo, currentFormatType]);
+  }, [url, selectedFormat, videoInfo, currentFormatType, trackDownloadStart, trackDownloadComplete]);
 
   const checkDownloadStatus = useCallback(async (id) => {
     try {
@@ -276,8 +312,8 @@ const VideoDownloadPage = () => {
 
   // Kiểm tra xem format có phải là premium không
   const isFormatPremium = useCallback((format) => {
-    return format.isPremium && user?.subscription !== 'premium';
-  }, [user?.subscription]);
+    return format.isPremium && currentTier !== 'pro';
+  }, [currentTier]);
 
   // Kiểm tra xem format có được chọn không
   const isFormatSelected = useCallback((formatId) => {
@@ -319,10 +355,7 @@ const VideoDownloadPage = () => {
             </p>
           </header>
           
-          {/* Thông tin gói đăng ký và giới hạn người dùng */}
-          <section className="border-t border-gray-200 px-4 py-5 sm:px-6" aria-label="Thông tin gói đăng ký">
-            <UserLimitsInfo />
-          </section>
+
           
           {/* Form nhập URL */}
           <section className="border-t border-gray-200 px-4 py-5 sm:px-6" aria-labelledby="url-input-heading">
@@ -843,6 +876,15 @@ const VideoDownloadPage = () => {
             </div>
           )}
         </section>
+
+        {/* Pre-Download Ad Modal */}
+        {showPreDownloadAd && (
+          <PreDownloadAd
+            onClose={() => setShowPreDownloadAd(false)}
+            onContinue={performDownload}
+            videoTitle={videoInfo?.title}
+          />
+        )}
       </div>
     </main>
   );

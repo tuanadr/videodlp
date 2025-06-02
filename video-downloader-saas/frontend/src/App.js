@@ -1,7 +1,8 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import { useAuth } from './context/AuthContextV2';
 import { SupportedSitesProvider } from './context/SupportedSitesContext'; // Import SupportedSitesProvider
+import AnalyticsTracker from './components/analytics/AnalyticsTracker';
 
 // Layouts
 import MainLayout from './components/layouts/MainLayout';
@@ -19,8 +20,10 @@ import NotFoundPage from './pages/NotFoundPage';
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
+const UpgradePage = lazy(() => import('./pages/UpgradePage'));
 const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
 const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
+const PaymentResultPage = lazy(() => import('./pages/PaymentResultPage'));
 const SupportedSitesPage = lazy(() => import('./pages/SupportedSitesPage'));
 const ReferralPage = lazy(() => import('./pages/ReferralPage'));
 
@@ -85,43 +88,49 @@ const AdminRoute = ({ children }) => {
 function App() {
   return (
     <SupportedSitesProvider> {/* Wrap Routes with SupportedSitesProvider */}
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
-          <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
-          <Route path="supported-sites" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <SupportedSitesPage />
-            </Suspense>
-          } />
-          <Route path="tai-video-youtube" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <YouTubeDownloaderPage />
-            </Suspense>
-          } />
-          <Route path="tai-video-facebook" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <FacebookDownloaderPage />
-            </Suspense>
-          } />
-          <Route path="tai-video-tiktok" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <TikTokDownloaderPage />
-            </Suspense>
-          } />
-          <Route path="tai-video-instagram" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <InstagramDownloaderPage />
-            </Suspense>
-          } />
-          <Route path="tai-nhac-soundcloud" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <SoundCloudDownloaderPage />
-            </Suspense>
-          } />
-        </Route>
+      <AnalyticsTracker>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
+            <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
+            <Route path="upgrade" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <UpgradePage />
+              </Suspense>
+            } />
+            <Route path="supported-sites" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <SupportedSitesPage />
+              </Suspense>
+            } />
+            <Route path="tai-video-youtube" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <YouTubeDownloaderPage />
+              </Suspense>
+            } />
+            <Route path="tai-video-facebook" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <FacebookDownloaderPage />
+              </Suspense>
+            } />
+            <Route path="tai-video-tiktok" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <TikTokDownloaderPage />
+              </Suspense>
+            } />
+            <Route path="tai-video-instagram" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <InstagramDownloaderPage />
+              </Suspense>
+            } />
+            <Route path="tai-nhac-soundcloud" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <SoundCloudDownloaderPage />
+              </Suspense>
+            } />
+          </Route>
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={
@@ -192,12 +201,18 @@ function App() {
             <PaymentCancelPage />
           </Suspense>
         } />
+        <Route path="result" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <PaymentResultPage />
+          </Suspense>
+        } />
       </Route>
 
         {/* 404 Route */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-    </SupportedSitesProvider> // Close SupportedSitesProvider
+      </AnalyticsTracker>
+    </SupportedSitesProvider>
   );
 }
 

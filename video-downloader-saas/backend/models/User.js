@@ -66,21 +66,10 @@ class User extends Model {
     return this.tier;
   }
 
-  // Kiểm tra có thể download không
+  // Kiểm tra có thể download không (Updated: Unlimited downloads for all)
   canDownload() {
-    const currentTier = this.getCurrentTier();
-    this.resetDailyDownloadCount();
-
-    const tierLimits = {
-      anonymous: 5,
-      free: 20,
-      pro: -1 // unlimited
-    };
-
-    const limit = tierLimits[currentTier];
-    if (limit === -1) return true; // unlimited
-
-    return this.monthly_download_count < limit;
+    // All users can download unlimited times
+    return this.isActive !== false;
   }
 
   // Tăng download count

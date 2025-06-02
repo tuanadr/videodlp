@@ -262,29 +262,19 @@ module.exports = (sequelize) => {
   };
 
   User.prototype.canDownload = function() {
-    const currentTier = this.getTier();
-
-    // Reset monthly count if needed
-    this.resetMonthlyDownloadCount();
-
-    // Define tier limits
-    const tierLimits = {
-      'anonymous': 5,
-      'free': 20,
-      'pro': Infinity
-    };
-
-    const limit = tierLimits[currentTier] || 0;
-    return this.monthlyDownloadCount < limit || this.bonusDownloads > 0;
+    // Updated: All users can download unlimited times
+    // Only check if user account is active
+    return this.isActive !== false;
   };
 
   User.prototype.getDownloadLimits = function() {
     const currentTier = this.getTier();
 
+    // Updated: Only quality restrictions, no download count limits
     const tierLimits = {
-      'anonymous': { daily: 5, monthly: 5, maxResolution: 1080 },
-      'free': { daily: 20, monthly: 20, maxResolution: 1080 },
-      'pro': { daily: Infinity, monthly: Infinity, maxResolution: Infinity }
+      'anonymous': { maxResolution: 1080, showAds: true },
+      'free': { maxResolution: 1080, showAds: true },
+      'pro': { maxResolution: Infinity, showAds: false }
     };
 
     return tierLimits[currentTier] || tierLimits['anonymous'];

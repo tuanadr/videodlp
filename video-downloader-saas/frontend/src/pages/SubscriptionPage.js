@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextV2';
 import { useSettings } from '../context/SettingsContext';
 import axios from 'axios';
 import { loadStripe } from '@stripe/stripe-js';

@@ -9,16 +9,18 @@ VideoDownloader SaaS đã được nâng cấp với hệ thống tier, thanh to
 ### 1. Hệ thống Tier (3 cấp độ)
 
 #### 🔓 Anonymous (Khách)
-- **Giới hạn**: 3 downloads/ngày
-- **Chất lượng**: Tối đa 720p
-- **Tính năng**: Download cơ bản
+- **Giới hạn**: Không giới hạn downloads
+- **Chất lượng**: Tối đa 1080p
+- **Tính năng**: Download cơ bản (streaming trực tiếp)
 - **Quảng cáo**: Có
+- **Lưu lịch sử**: Không
 
 #### 🆓 Free (Miễn phí)
-- **Giới hạn**: 10 downloads/tháng
+- **Giới hạn**: Không giới hạn downloads
 - **Chất lượng**: Tối đa 1080p
-- **Tính năng**: Download cơ bản + lưu lịch sử
+- **Tính năng**: Download cơ bản (streaming trực tiếp)
 - **Quảng cáo**: Có
+- **Lưu lịch sử**: Không
 
 #### 👑 Pro (Trả phí)
 - **Giới hạn**: Không giới hạn

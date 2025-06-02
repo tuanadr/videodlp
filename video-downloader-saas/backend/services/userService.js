@@ -257,7 +257,7 @@ class UserService {
   }
 
   /**
-   * Check download limits
+   * Check download permissions (Updated: No download count limits)
    */
   static async checkDownloadLimits(userId) {
     const user = await User.findByPk(userId);
@@ -265,46 +265,11 @@ class UserService {
       throw new NotFoundError('User not found');
     }
 
-    // Admin users have no limits
-    if (user.role === 'admin') {
-      return { canDownload: true, reason: 'admin' };
-    }
-
-    const limits = {
-      free: { daily: 5, total: 100 },
-      premium: { daily: 100, total: 10000 }
-    };
-
-    const userLimits = limits[user.subscription] || limits.free;
-    const dailyCount = user.dailyDownloadCount || 0;
-    const totalCount = user.downloadCount || 0;
-
-    // Check daily limit
-    if (dailyCount >= userLimits.daily) {
-      return { 
-        canDownload: false, 
-        reason: 'daily_limit',
-        limit: userLimits.daily,
-        current: dailyCount
-      };
-    }
-
-    // Check total limit
-    if (totalCount >= userLimits.total) {
-      return { 
-        canDownload: false, 
-        reason: 'total_limit',
-        limit: userLimits.total,
-        current: totalCount
-      };
-    }
-
-    return { 
-      canDownload: true, 
-      remaining: {
-        daily: userLimits.daily - dailyCount,
-        total: userLimits.total - totalCount
-      }
+    // All users can download unlimited times
+    // Only check if account is active
+    return {
+      canDownload: user.isActive !== false,
+      reason: user.isActive !== false ? null : 'account_disabled'
     };
   }
 

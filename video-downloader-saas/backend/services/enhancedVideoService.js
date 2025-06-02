@@ -266,21 +266,17 @@ class EnhancedVideoService {
   }
 
   /**
-   * Check tier limits before download
+   * Check tier limits before download (Updated: No download count limits)
    */
   async checkTierLimits(user, userTier) {
-    if (!user && userTier !== 'anonymous') {
-      throw new Error('User authentication required');
-    }
-
     if (user) {
-      // Check if user can download
+      // Only check if user account is active
       if (!user.canDownload()) {
-        const limits = getDownloadLimits(userTier);
-        throw new Error(`Đã đạt giới hạn tải xuống hàng ngày (${limits.daily} lượt)`);
+        throw new Error('Tài khoản của bạn đã bị vô hiệu hóa');
       }
     }
 
+    // No download count limits - all users can download unlimited times
     return true;
   }
 

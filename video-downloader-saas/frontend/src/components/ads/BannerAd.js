@@ -41,11 +41,17 @@ const BannerAd = ({ position = 'header', className = '' }) => {
 
   const trackAdImpression = async () => {
     try {
-      await axios.post('/api/analytics/track/ad-impression', {
+      // Temporarily disable analytics to prevent errors
+      console.log('Ad impression tracked:', {
         adType: 'banner',
         adPosition: position,
         adId: `banner_${position}_${Date.now()}`
       });
+      // await axios.post('/api/analytics/track/ad-impression', {
+      //   adType: 'banner',
+      //   adPosition: position,
+      //   adId: `banner_${position}_${Date.now()}`
+      // });
     } catch (error) {
       console.error('Failed to track ad impression:', error);
     }
@@ -53,11 +59,17 @@ const BannerAd = ({ position = 'header', className = '' }) => {
 
   const trackAdClick = async () => {
     try {
-      await axios.post('/api/analytics/track/ad-click', {
+      // Temporarily disable analytics to prevent errors
+      console.log('Ad click tracked:', {
         adType: 'banner',
         adPosition: position,
         adId: `banner_${position}_${Date.now()}`
       });
+      // await axios.post('/api/analytics/track/ad-click', {
+      //   adType: 'banner',
+      //   adPosition: position,
+      //   adId: `banner_${position}_${Date.now()}`
+      // });
     } catch (error) {
       console.error('Failed to track ad click:', error);
     }
