@@ -1,6 +1,6 @@
 const AnalyticsService = require('../services/analyticsService');
 const AdService = require('../services/adService');
-const { DownloadHistory, UserAnalytics, AdImpression, PaymentTransaction } = require('../models');
+const { UserAnalytics, AdImpression, PaymentTransaction } = require('../models');
 const { catchAsync } = require('../utils/errorHandler');
 
 // Initialize services
@@ -44,33 +44,26 @@ exports.getUserAnalytics = catchAsync(async (req, res, next) => {
 });
 
 /**
- * @desc    Lấy thống kê download
+ * @desc    Lấy thống kê download (simplified - no download history tracking)
  * @route   GET /api/analytics/downloads
  * @access  Private/Admin
  */
 exports.getDownloadStats = catchAsync(async (req, res, next) => {
-  const { startDate, endDate, userTier } = req.query;
-  
+  // Since we removed download history tracking, return basic stats from UserAnalytics
+  const { startDate, endDate } = req.query;
+
   const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const end = endDate ? new Date(endDate) : new Date();
 
-  const [stats, trends, topVideos, popularFormats, tierConversion] = await Promise.all([
-    DownloadHistory.getDownloadStats(start, end, userTier),
-    DownloadHistory.getDailyTrends(start, end),
-    DownloadHistory.getTopVideos(start, end, 10),
-    DownloadHistory.getPopularFormats(start, end, 10),
-    DownloadHistory.getTierConversionFunnel(start, end)
-  ]);
+  // Get basic analytics from UserAnalytics instead
+  const stats = await UserAnalytics.getBasicStats(start, end);
 
   res.status(200).json({
     success: true,
     data: {
       period: { startDate: start, endDate: end },
       summary: stats,
-      trends,
-      topVideos,
-      popularFormats,
-      tierConversion
+      message: 'Download history tracking removed - unlimited downloads for all tiers'
     }
   });
 });

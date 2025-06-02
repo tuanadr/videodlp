@@ -47,8 +47,7 @@ performanceMonitor.startPeriodicMonitoring();
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const videoRoutes = require('./routes/video');
-const paymentRoutes = require('./routes/payment');
-const paymentsRoutes = require('./routes/payments'); // New enhanced payments
+const paymentsRoutes = require('./routes/payments'); // Enhanced payments
 const analyticsRoutes = require('./routes/analytics'); // New analytics
 const adminRoutes = require('./routes/admin'); // Thêm routes cho admin
 const settingsRoutes = require('./routes/settings'); // Thêm routes cho settings
@@ -151,7 +150,6 @@ app.use('/api', (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/videos', videoRoutes);
-app.use('/api/payments', paymentRoutes); // Legacy payment routes
 app.use('/api/payments', paymentsRoutes); // Enhanced payment routes
 app.use('/api/analytics', analyticsRoutes); // Analytics routes
 app.use('/api/admin', adminRoutes); // Thêm routes cho admin

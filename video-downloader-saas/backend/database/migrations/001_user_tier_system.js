@@ -222,66 +222,7 @@ module.exports = {
         }
       }, { transaction });
 
-      // Create DownloadHistory table
-      await queryInterface.createTable('DownloadHistory', {
-        id: {
-          type: DataTypes.INTEGER,
-          primaryKey: true,
-          autoIncrement: true
-        },
-        user_id: {
-          type: DataTypes.INTEGER,
-          allowNull: true,
-          references: {
-            model: 'Users',
-            key: 'id'
-          },
-          onUpdate: 'CASCADE',
-          onDelete: 'SET NULL'
-        },
-        session_id: {
-          type: DataTypes.STRING(255),
-          allowNull: true
-        },
-        video_url: {
-          type: DataTypes.TEXT,
-          allowNull: false
-        },
-        video_title: {
-          type: DataTypes.STRING(500),
-          allowNull: true
-        },
-        format_id: {
-          type: DataTypes.STRING(100),
-          allowNull: true
-        },
-        quality: {
-          type: DataTypes.STRING(50),
-          allowNull: true
-        },
-        file_size_mb: {
-          type: DataTypes.DECIMAL(10, 2),
-          allowNull: true
-        },
-        download_duration_seconds: {
-          type: DataTypes.INTEGER,
-          allowNull: true
-        },
-        user_tier: {
-          type: queryInterface.sequelize.getDialect() === 'postgres' 
-            ? 'user_tier' 
-            : DataTypes.ENUM('anonymous', 'free', 'pro'),
-          allowNull: false
-        },
-        revenue_generated: {
-          type: DataTypes.DECIMAL(10, 2),
-          defaultValue: 0
-        },
-        created_at: {
-          type: DataTypes.DATE,
-          defaultValue: Sequelize.fn('NOW')
-        }
-      }, { transaction });
+      // DownloadHistory table removed - unlimited downloads for all tiers
 
       // Create indexes for better performance
       await queryInterface.addIndex('UserAnalytics', ['user_id'], { transaction });
@@ -289,8 +230,7 @@ module.exports = {
       await queryInterface.addIndex('AdImpressions', ['user_id'], { transaction });
       await queryInterface.addIndex('PaymentTransactions', ['user_id'], { transaction });
       await queryInterface.addIndex('PaymentTransactions', ['transaction_id'], { transaction });
-      await queryInterface.addIndex('DownloadHistory', ['user_id'], { transaction });
-      await queryInterface.addIndex('DownloadHistory', ['created_at'], { transaction });
+      // DownloadHistory indexes removed
 
       await transaction.commit();
       console.log('Migration 001_user_tier_system completed successfully');
@@ -305,8 +245,7 @@ module.exports = {
     const transaction = await queryInterface.sequelize.transaction();
     
     try {
-      // Drop tables
-      await queryInterface.dropTable('DownloadHistory', { transaction });
+      // Drop tables (DownloadHistory removed)
       await queryInterface.dropTable('PaymentTransactions', { transaction });
       await queryInterface.dropTable('AdImpressions', { transaction });
       await queryInterface.dropTable('UserAnalytics', { transaction });

@@ -1,4 +1,4 @@
-const { UserAnalytics, AdImpression, PaymentTransaction, DownloadHistory, User } = require('../models');
+const { UserAnalytics, AdImpression, PaymentTransaction, User } = require('../models');
 const { sequelize } = require('../database');
 
 class AnalyticsService {
@@ -40,20 +40,15 @@ class AnalyticsService {
   }
 
   /**
-   * Track download start
+   * Track download start (simplified - no download history tracking)
    */
   async trackDownloadStart(userId, sessionId, videoUrl, formatId, videoTitle, userTier) {
     try {
-      const download = await DownloadHistory.createDownload({
-        userId,
-        sessionId,
-        videoUrl,
-        videoTitle,
-        formatId,
-        userTier
-      });
+      // Since we removed download history, just update user analytics
+      await UserAnalytics.trackDownload(userId, sessionId, 0);
 
-      return download;
+      console.log(`Download started: ${videoTitle} by user ${userId || 'anonymous'} (${userTier})`);
+      return { success: true, message: 'Download tracking simplified' };
     } catch (error) {
       console.error('Error tracking download start:', error);
       return null;
@@ -61,29 +56,15 @@ class AnalyticsService {
   }
 
   /**
-   * Track download completion
+   * Track download completion (simplified - no download history tracking)
    */
   async trackDownloadComplete(userId, sessionId, videoUrl, formatId, duration, fileSizeMb = null, revenueGenerated = 0) {
     try {
-      // Find the download record
-      const download = await DownloadHistory.findOne({
-        where: { 
-          user_id: userId || null, 
-          session_id: sessionId, 
-          video_url: videoUrl,
-          format_id: formatId
-        },
-        order: [['created_at', 'DESC']]
-      });
-
-      if (download) {
-        await download.updateCompletion(fileSizeMb, Math.floor(duration / 1000), revenueGenerated);
-      }
-
-      // Update user analytics
+      // Update user analytics only
       await UserAnalytics.trackDownload(userId, sessionId, revenueGenerated);
 
-      return download;
+      console.log(`Download completed: ${videoUrl} by user ${userId || 'anonymous'}, duration: ${duration}ms`);
+      return { success: true, message: 'Download completion tracked in user analytics' };
     } catch (error) {
       console.error('Error tracking download complete:', error);
       return null;
@@ -262,19 +243,15 @@ class AnalyticsService {
   }
 
   /**
-   * Get download statistics
+   * Get download statistics (simplified - from UserAnalytics only)
    */
   async getDownloadStats(startDate, endDate) {
-    const stats = await DownloadHistory.getDownloadStats(startDate, endDate);
-    const trends = await DownloadHistory.getDailyTrends(startDate, endDate);
-    const topVideos = await DownloadHistory.getTopVideos(startDate, endDate, 10);
-    const popularFormats = await DownloadHistory.getPopularFormats(startDate, endDate, 10);
+    // Get basic download stats from UserAnalytics instead
+    const stats = await UserAnalytics.getBasicStats(startDate, endDate);
 
     return {
       summary: stats,
-      trends,
-      topVideos,
-      popularFormats
+      message: 'Download history tracking removed - unlimited downloads for all tiers'
     };
   }
 
@@ -312,28 +289,27 @@ class AnalyticsService {
       const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
       const endDate = new Date();
 
-      const [analytics, downloads, payments] = await Promise.all([
+      const [analytics, payments] = await Promise.all([
         UserAnalytics.findAll({
-          where: { 
+          where: {
             user_id: userId,
             created_at: { [sequelize.Op.between]: [startDate, endDate] }
           },
           order: [['created_at', 'DESC']]
         }),
-        DownloadHistory.getUserDownloads(userId, 50, 0),
         PaymentTransaction.getUserPaymentHistory(userId, 10, 0)
       ]);
 
       return {
         analytics,
-        downloads: downloads.rows,
         payments: payments.rows,
         summary: {
           totalPageViews: analytics.reduce((sum, a) => sum + a.page_views, 0),
           totalDownloads: analytics.reduce((sum, a) => sum + a.downloads_count, 0),
           totalTimeSpent: analytics.reduce((sum, a) => sum + a.time_spent_seconds, 0),
           totalRevenue: analytics.reduce((sum, a) => sum + parseFloat(a.revenue_generated), 0)
-        }
+        },
+        message: 'Download history removed - showing analytics data only'
       };
     } catch (error) {
       console.error('Error getting user behavior analytics:', error);
@@ -342,16 +318,13 @@ class AnalyticsService {
   }
 
   /**
-   * Clean up old analytics data
+   * Clean up old analytics data (simplified - no download history)
    */
   async cleanupOldData(daysToKeep = 90) {
     try {
       const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
-      
-      // Clean up anonymous download history
-      const deletedDownloads = await DownloadHistory.cleanupOldAnonymousDownloads(daysToKeep);
-      
-      // Clean up old analytics for anonymous users
+
+      // Clean up old analytics for anonymous users only
       const deletedAnalytics = await UserAnalytics.destroy({
         where: {
           user_id: null,
@@ -360,8 +333,8 @@ class AnalyticsService {
       });
 
       return {
-        deletedDownloads,
-        deletedAnalytics
+        deletedAnalytics,
+        message: 'Download history cleanup removed - no download history tracking'
       };
     } catch (error) {
       console.error('Error cleaning up old data:', error);

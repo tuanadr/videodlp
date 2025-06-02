@@ -5,7 +5,6 @@ const RefreshToken = require('./RefreshToken');
 const UserAnalytics = require('./UserAnalytics');
 const AdImpression = require('./AdImpression');
 const PaymentTransaction = require('./PaymentTransaction');
-const DownloadHistory = require('./DownloadHistory');
 const { sequelize } = require('../database');
 
 // Thiết lập các mối quan hệ
@@ -69,15 +68,7 @@ PaymentTransaction.belongsTo(User, {
   as: 'user'
 });
 
-// User - DownloadHistory: 1-n
-User.hasMany(DownloadHistory, {
-  foreignKey: 'user_id',
-  as: 'downloadHistory'
-});
-DownloadHistory.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user'
-});
+
 
 // User - User (referral): 1-n
 User.hasMany(User, {
@@ -98,6 +89,5 @@ module.exports = {
   UserAnalytics,
   AdImpression,
   PaymentTransaction,
-  DownloadHistory,
   sequelize
 };
