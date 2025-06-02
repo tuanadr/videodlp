@@ -38,6 +38,33 @@ module.exports = (sequelize) => {
       type: DataTypes.ENUM('free', 'premium'),
       defaultValue: 'free'
     },
+    // New tier system fields
+    tier: {
+      type: DataTypes.ENUM('anonymous', 'free', 'pro'),
+      defaultValue: 'free',
+      allowNull: false
+    },
+    subscriptionExpiresAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'subscription_expires_at'
+    },
+    monthlyDownloadCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'monthly_download_count'
+    },
+    lastResetDate: {
+      type: DataTypes.DATEONLY,
+      defaultValue: DataTypes.NOW,
+      field: 'last_reset_date'
+    },
+    totalRevenueGenerated: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0,
+      field: 'total_revenue_generated'
+    },
+    // Legacy fields (keeping for backward compatibility)
     stripeCustomerId: {
       type: DataTypes.STRING,
       allowNull: true
@@ -181,6 +208,86 @@ module.exports = (sequelize) => {
 
   User.prototype.addBonusDownloads = function(count) {
     this.bonusDownloads += count;
+  };
+
+  // New tier system methods
+  User.prototype.getTier = function() {
+    // Check if pro subscription is still valid
+    if (this.tier === 'pro' && this.subscriptionExpiresAt) {
+      if (new Date() > this.subscriptionExpiresAt) {
+        // Subscription expired, downgrade to free
+        this.tier = 'free';
+        this.subscriptionExpiresAt = null;
+        this.save();
+        return 'free';
+      }
+    }
+    return this.tier;
+  };
+
+  User.prototype.upgradeToPro = function(months = 1) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + (months * 30 * 24 * 60 * 60 * 1000));
+
+    this.tier = 'pro';
+    this.subscriptionExpiresAt = expiresAt;
+    return this.save();
+  };
+
+  User.prototype.downgradeToFree = function() {
+    this.tier = 'free';
+    this.subscriptionExpiresAt = null;
+    return this.save();
+  };
+
+  User.prototype.resetMonthlyDownloadCount = function() {
+    const today = new Date();
+    const lastReset = this.lastResetDate;
+
+    // Reset if it's a new month or first time
+    if (!lastReset ||
+        lastReset.getMonth() !== today.getMonth() ||
+        lastReset.getFullYear() !== today.getFullYear()) {
+      this.monthlyDownloadCount = 0;
+      this.lastResetDate = today;
+      return true;
+    }
+    return false;
+  };
+
+  User.prototype.incrementDownloadCount = function() {
+    this.monthlyDownloadCount += 1;
+    this.downloadCount += 1; // Legacy counter
+    return this.save();
+  };
+
+  User.prototype.canDownload = function() {
+    const currentTier = this.getTier();
+
+    // Reset monthly count if needed
+    this.resetMonthlyDownloadCount();
+
+    // Define tier limits
+    const tierLimits = {
+      'anonymous': 5,
+      'free': 20,
+      'pro': Infinity
+    };
+
+    const limit = tierLimits[currentTier] || 0;
+    return this.monthlyDownloadCount < limit || this.bonusDownloads > 0;
+  };
+
+  User.prototype.getDownloadLimits = function() {
+    const currentTier = this.getTier();
+
+    const tierLimits = {
+      'anonymous': { daily: 5, monthly: 5, maxResolution: 1080 },
+      'free': { daily: 20, monthly: 20, maxResolution: 1080 },
+      'pro': { daily: Infinity, monthly: Infinity, maxResolution: Infinity }
+    };
+
+    return tierLimits[currentTier] || tierLimits['anonymous'];
   };
 
   return User;

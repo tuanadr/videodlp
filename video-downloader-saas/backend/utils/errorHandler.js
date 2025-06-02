@@ -198,5 +198,6 @@ module.exports = {
   ApiResponse,
   globalErrorHandler,
   asyncHandler,
+  catchAsync: asyncHandler, // Alias for backward compatibility
   notFoundHandler
 };

@@ -12,9 +12,9 @@ const sequelize = new Sequelize(dbConfig);
 const testConnection = async () => {
   try {
     await sequelize.authenticate();
-    console.log('Kết nối SQLite thành công.');
+    console.log('Kết nối PostgreSQL thành công.');
   } catch (error) {
-    console.error('Lỗi kết nối SQLite:', error);
+    console.error('Lỗi kết nối PostgreSQL:', error);
     process.exit(1);
   }
 };

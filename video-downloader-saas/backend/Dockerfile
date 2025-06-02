@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS build
+FROM node:18-slim AS build
 
 WORKDIR /app
 
@@ -16,11 +16,20 @@ COPY . .
 # Main file is server.js (JavaScript)
 
 # Production stage
-FROM node:18-alpine
+FROM node:18-slim
 
-# Install ffmpeg, yt-dlp dependencies, and build tools
-RUN apk add --no-cache ffmpeg python3 py3-pip curl bash py3-virtualenv \
-    build-base python3-dev
+# Install ffmpeg, yt-dlp dependencies, and build tools including PostgreSQL dev
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    bash \
+    build-essential \
+    python3-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install yt-dlp in a virtual environment
 RUN python3 -m venv /opt/venv && \
@@ -30,13 +39,7 @@ RUN python3 -m venv /opt/venv && \
 # Create app directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Remove any existing node_modules and install fresh
-RUN rm -rf node_modules package-lock.json
-
-# Copy source files from build stage (excluding node_modules)
+# Copy source files from build stage (including node_modules)
 COPY --from=build /app/controllers ./controllers
 COPY --from=build /app/middleware ./middleware
 COPY --from=build /app/models ./models
@@ -52,10 +55,11 @@ COPY --from=build /app/server.js ./
 COPY --from=build /app/database.js ./
 COPY --from=build /app/jest.config.js ./
 COPY --from=build /app/tsconfig.json ./
+COPY --from=build /app/node_modules ./node_modules
 
-# Install production dependencies only and rebuild native modules
-RUN npm install --only=production && \
-    npm rebuild --build-from-source
+# Install pg package specifically for PostgreSQL support
+RUN npm install pg --save && \
+    npm rebuild pg --build-from-source
 
 # Create necessary directories
 RUN mkdir -p downloads logs database

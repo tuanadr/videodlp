@@ -8,14 +8,36 @@ class FFmpegService {
   constructor() {
     this.ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
     this.ffprobePath = process.env.FFPROBE_PATH || 'ffprobe';
-    
+
     // Set ffmpeg paths
     ffmpeg.setFfmpegPath(this.ffmpegPath);
     ffmpeg.setFfprobePath(this.ffprobePath);
+
+    // Performance optimization settings
+    this.defaultPresets = {
+      'anonymous': 'ultrafast',
+      'free': 'fast',
+      'pro': 'medium'
+    };
+
+    // Quality settings per tier
+    this.qualitySettings = {
+      'anonymous': { crf: 28, maxBitrate: '1000k' },
+      'free': { crf: 25, maxBitrate: '2000k' },
+      'pro': { crf: 20, maxBitrate: '5000k' }
+    };
+
+    // Concurrent transcoding limits
+    this.activeTranscodings = new Map();
+    this.maxConcurrentTranscodings = {
+      'anonymous': 1,
+      'free': 2,
+      'pro': 5
+    };
   }
 
   /**
-   * Transcode stream with tier-based quality restrictions
+   * Enhanced transcode stream with tier-based quality restrictions and performance optimization
    */
   async transcodeStream(inputStream, options = {}) {
     const {
@@ -24,31 +46,50 @@ class FFmpegService {
       resolution = null,
       audioBitrate = '128k',
       videoBitrate = null,
-      userTier = 'anonymous'
+      userTier = 'anonymous',
+      sessionId = null,
+      enableHardwareAcceleration = true,
+      adaptiveBitrate = false
     } = options;
 
+    // Check concurrent transcoding limits
+    await this.checkConcurrentLimit(userTier, sessionId);
+
     const tierRestrictions = getTierRestrictions(userTier);
-    
+    const tierSettings = this.qualitySettings[userTier] || this.qualitySettings['anonymous'];
+
     // Apply tier-based restrictions
     const finalAudioBitrate = this.applyAudioBitrateRestriction(audioBitrate, tierRestrictions);
-    const finalVideoBitrate = this.applyVideoBitrateRestriction(videoBitrate, tierRestrictions);
+    const finalVideoBitrate = this.applyVideoBitrateRestriction(videoBitrate || tierSettings.maxBitrate, tierRestrictions);
     const finalResolution = this.applyResolutionRestriction(resolution, tierRestrictions);
 
-    const ffmpegArgs = [
+    const ffmpegArgs = ['-hide_banner', '-loglevel', 'error'];
+
+    // Hardware acceleration for Pro users
+    if (enableHardwareAcceleration && userTier === 'pro') {
+      ffmpegArgs.push('-hwaccel', 'auto');
+    }
+
+    ffmpegArgs.push(
       '-i', 'pipe:0', // Input from stdin
       '-f', outputFormat,
-      '-movflags', 'frag_keyframe+empty_moov', // For streaming
-      '-preset', this.getPresetForTier(userTier),
-      '-crf', this.getQualityCRF(quality, userTier)
-    ];
+      '-movflags', 'frag_keyframe+empty_moov+faststart', // Optimized for streaming
+      '-preset', this.defaultPresets[userTier] || 'fast',
+      '-crf', tierSettings.crf.toString()
+    );
 
-    // Video settings
+    // Video settings with tier optimization
     if (finalResolution) {
-      ffmpegArgs.push('-vf', `scale=${finalResolution}`);
+      const scaleFilter = userTier === 'pro' ?
+        `scale=${finalResolution}:flags=lanczos` :
+        `scale=${finalResolution}:flags=bilinear`;
+      ffmpegArgs.push('-vf', scaleFilter);
     }
-    
+
     if (finalVideoBitrate) {
       ffmpegArgs.push('-b:v', finalVideoBitrate);
+      ffmpegArgs.push('-maxrate', finalVideoBitrate);
+      ffmpegArgs.push('-bufsize', this.calculateBufferSize(finalVideoBitrate));
     }
 
     // Audio settings
@@ -289,20 +330,226 @@ class FFmpegService {
   }
 
   /**
-   * Validate FFmpeg installation
+   * Check concurrent transcoding limits
+   */
+  async checkConcurrentLimit(userTier, sessionId) {
+    const maxConcurrent = this.maxConcurrentTranscodings[userTier] || 1;
+    const currentCount = this.activeTranscodings.size;
+
+    if (currentCount >= maxConcurrent) {
+      throw new Error(`Đã đạt giới hạn ${maxConcurrent} transcoding đồng thời cho tier ${userTier}`);
+    }
+
+    if (sessionId) {
+      this.activeTranscodings.set(sessionId, {
+        tier: userTier,
+        startTime: Date.now()
+      });
+    }
+  }
+
+  /**
+   * Remove transcoding session
+   */
+  removeTranscodingSession(sessionId) {
+    if (sessionId) {
+      this.activeTranscodings.delete(sessionId);
+    }
+  }
+
+  /**
+   * Calculate buffer size based on bitrate
+   */
+  calculateBufferSize(bitrate) {
+    const bitrateNum = parseInt(bitrate.replace(/[^\d]/g, ''));
+    return `${Math.max(bitrateNum * 2, 1000)}k`;
+  }
+
+  /**
+   * Get optimal thread count for tier
+   */
+  getThreadCount(userTier) {
+    const threadCounts = {
+      'anonymous': 1,
+      'free': 2,
+      'pro': 4
+    };
+    return threadCounts[userTier] || 1;
+  }
+
+  /**
+   * Enhanced adaptive bitrate streaming
+   */
+  async createAdaptiveBitrateStream(inputStream, options = {}) {
+    const { userTier = 'anonymous', sessionId = null } = options;
+
+    if (userTier !== 'pro') {
+      throw new Error('Adaptive bitrate streaming chỉ dành cho Pro users');
+    }
+
+    await this.checkConcurrentLimit(userTier, sessionId);
+
+    const qualities = [
+      { resolution: '1920x1080', bitrate: '5000k', suffix: '1080p' },
+      { resolution: '1280x720', bitrate: '2500k', suffix: '720p' },
+      { resolution: '854x480', bitrate: '1000k', suffix: '480p' }
+    ];
+
+    const processes = [];
+
+    for (const quality of qualities) {
+      const ffmpegArgs = [
+        '-hide_banner', '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-vf', `scale=${quality.resolution}:flags=lanczos`,
+        '-b:v', quality.bitrate,
+        '-maxrate', quality.bitrate,
+        '-bufsize', this.calculateBufferSize(quality.bitrate),
+        '-preset', 'fast',
+        '-f', 'mp4',
+        '-movflags', 'frag_keyframe+empty_moov',
+        'pipe:1'
+      ];
+
+      const process = spawn(this.ffmpegPath, ffmpegArgs);
+      inputStream.pipe(process.stdin);
+      processes.push({
+        process,
+        quality: quality.suffix,
+        stream: process.stdout
+      });
+    }
+
+    return processes;
+  }
+
+  /**
+   * Real-time quality adjustment based on network conditions
+   */
+  async adjustQualityRealtime(inputStream, options = {}) {
+    const {
+      userTier = 'anonymous',
+      initialBitrate = '1000k',
+      sessionId = null
+    } = options;
+
+    if (userTier === 'anonymous') {
+      throw new Error('Real-time quality adjustment không khả dụng cho anonymous users');
+    }
+
+    await this.checkConcurrentLimit(userTier, sessionId);
+
+    // Start with initial quality
+    let currentBitrate = initialBitrate;
+    const tierSettings = this.qualitySettings[userTier];
+
+    const ffmpegArgs = [
+      '-hide_banner', '-loglevel', 'error',
+      '-i', 'pipe:0',
+      '-b:v', currentBitrate,
+      '-maxrate', currentBitrate,
+      '-bufsize', this.calculateBufferSize(currentBitrate),
+      '-preset', this.defaultPresets[userTier],
+      '-crf', tierSettings.crf.toString(),
+      '-f', 'mp4',
+      '-movflags', 'frag_keyframe+empty_moov',
+      'pipe:1'
+    ];
+
+    const ffmpegProcess = spawn(this.ffmpegPath, ffmpegArgs);
+    inputStream.pipe(ffmpegProcess.stdin);
+
+    // Monitor and adjust quality (simplified implementation)
+    const qualityMonitor = setInterval(() => {
+      // In a real implementation, this would monitor network conditions
+      // and adjust the transcoding parameters accordingly
+    }, 5000);
+
+    ffmpegProcess.on('close', () => {
+      clearInterval(qualityMonitor);
+      this.removeTranscodingSession(sessionId);
+    });
+
+    return ffmpegProcess;
+  }
+
+  /**
+   * Validate FFmpeg installation and capabilities
    */
   async validateInstallation() {
     return new Promise((resolve) => {
       const ffmpegProcess = spawn(this.ffmpegPath, ['-version']);
-      
-      ffmpegProcess.on('close', (code) => {
-        resolve(code === 0);
+      let output = '';
+
+      ffmpegProcess.stdout.on('data', (data) => {
+        output += data.toString();
       });
-      
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0) {
+          // Check for hardware acceleration support
+          const hasHwAccel = output.includes('--enable-nvenc') ||
+                           output.includes('--enable-vaapi') ||
+                           output.includes('--enable-videotoolbox');
+
+          resolve({
+            installed: true,
+            version: this.extractVersion(output),
+            hardwareAcceleration: hasHwAccel,
+            capabilities: this.parseCapabilities(output)
+          });
+        } else {
+          resolve({ installed: false });
+        }
+      });
+
       ffmpegProcess.on('error', () => {
-        resolve(false);
+        resolve({ installed: false });
       });
     });
+  }
+
+  /**
+   * Extract FFmpeg version from output
+   */
+  extractVersion(output) {
+    const versionMatch = output.match(/ffmpeg version (\S+)/);
+    return versionMatch ? versionMatch[1] : 'unknown';
+  }
+
+  /**
+   * Parse FFmpeg capabilities
+   */
+  parseCapabilities(output) {
+    return {
+      codecs: output.includes('--enable-libx264'),
+      filters: output.includes('--enable-libfreetype'),
+      formats: output.includes('--enable-protocol=http')
+    };
+  }
+
+  /**
+   * Get transcoding statistics
+   */
+  getTranscodingStats() {
+    const stats = {
+      activeSessions: this.activeTranscodings.size,
+      sessionsByTier: {},
+      averageSessionDuration: 0
+    };
+
+    let totalDuration = 0;
+    for (const [sessionId, session] of this.activeTranscodings) {
+      const tier = session.tier;
+      stats.sessionsByTier[tier] = (stats.sessionsByTier[tier] || 0) + 1;
+      totalDuration += Date.now() - session.startTime;
+    }
+
+    if (this.activeTranscodings.size > 0) {
+      stats.averageSessionDuration = Math.round(totalDuration / this.activeTranscodings.size / 1000);
+    }
+
+    return stats;
   }
 }
 

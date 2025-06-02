@@ -10,6 +10,12 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:postgres": "node scripts/test-postgres.js",
+    "db:setup": "node scripts/test-postgres.js",
+    "db:migrate": "node -e \"require('./database').runMigrations()\"",
+    "ffmpeg:setup": "node scripts/setup-ffmpeg.js",
+    "ffmpeg:test": "node scripts/setup-ffmpeg.js",
+    "streaming:setup": "npm run db:setup && npm run ffmpeg:setup",
     "generate-sitemap": "node scripts/sitemap-generator.js"
   },
   "keywords": [
@@ -38,7 +44,6 @@
     "node-cache": "^5.1.2",
     "redis": "^4.6.6",
     "sequelize": "^6.37.7",
-    "sqlite3": "^5.1.7",
     "stripe": "^12.0.0",
     "winston": "^3.8.2",
     "pg": "^8.11.3",

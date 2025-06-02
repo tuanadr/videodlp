@@ -21,7 +21,7 @@ dist
 build
 downloads/*
 logs/*
-database/*.db
+# PostgreSQL không cần ignore database files
 !database/.gitkeep
 !downloads/.gitkeep
 !logs/.gitkeep

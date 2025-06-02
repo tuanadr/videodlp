@@ -155,6 +155,48 @@ router.post('/stream',
   streamVideo
 );
 
+// Enhanced streaming routes for Pro users
+router.post('/stream/adaptive',
+  sanitizeData,
+  videoUrlValidation,
+  optionalAuth,
+  checkTierRestrictions('pro'), // Pro only
+  checkSubscriptionExpiry,
+  addTierInfoToResponse,
+  checkDownloadLimits,
+  checkFormatRestrictions,
+  trackSessionDownloads,
+  createTierRateLimiter(),
+  require('../controllers/enhancedVideo').streamAdaptiveBitrate
+);
+
+router.post('/stream/quality-adjust',
+  sanitizeData,
+  videoUrlValidation,
+  optionalAuth,
+  checkTierRestrictions('free'), // Free and Pro
+  checkSubscriptionExpiry,
+  addTierInfoToResponse,
+  checkDownloadLimits,
+  checkFormatRestrictions,
+  trackSessionDownloads,
+  createTierRateLimiter(),
+  require('../controllers/enhancedVideo').streamWithQualityAdjustment
+);
+
+// Streaming analytics and monitoring
+router.get('/stream/stats',
+  optionalAuth,
+  apiLimiter,
+  require('../controllers/enhancedVideo').getStreamingStats
+);
+
+router.get('/stream/monitor',
+  protect, // Admin only
+  apiLimiter,
+  require('../controllers/enhancedVideo').getStreamingMonitor
+);
+
 // Routes yêu cầu xác thực
 router.get('/', protect, apiLimiter, getUserVideos);
 

@@ -293,35 +293,19 @@ const startServer = async () => {
     console.log('⚠️  Tiếp tục khởi động máy chủ mặc dù có lỗi cơ sở dữ liệu');
   }
   
-  // Đồng bộ hóa các models với cơ sở dữ liệu
+  // Đồng bộ hóa các models với PostgreSQL database
   if (dbInitialized) {
     try {
-      if (process.env.USE_SQLITE === 'true') {
-        // Đảm bảo thư mục database tồn tại và có quyền ghi
-        const fs = require('fs');
-        const path = require('path');
-        const dbDir = path.dirname(process.env.SQLITE_PATH || './database/videodlp.db');
-        
-        if (!fs.existsSync(dbDir)) {
-          fs.mkdirSync(dbDir, { recursive: true });
-          console.log(`Đã tạo thư mục database: ${dbDir}`);
-        }
-        
+      // Chỉ đồng bộ hóa trong môi trường phát triển hoặc khi có biến môi trường SYNC_DATABASE=true
+      if (process.env.NODE_ENV === 'development' || process.env.SYNC_DATABASE === 'true') {
         await modelsSequelize.sync({ alter: true });
-        console.log('Đồng bộ hóa cơ sở dữ liệu SQLite thành công');
+        console.log('✅ Đồng bộ hóa PostgreSQL database thành công');
       } else {
-        // Đối với PostgreSQL, chỉ đồng bộ hóa trong môi trường phát triển
-        // hoặc khi có biến môi trường SYNC_DATABASE=true
-        if (process.env.NODE_ENV === 'development' || process.env.SYNC_DATABASE === 'true') {
-          await modelsSequelize.sync({ alter: true });
-          console.log('Đồng bộ hóa cơ sở dữ liệu PostgreSQL thành công');
-        } else {
-          console.log('Bỏ qua đồng bộ hóa cơ sở dữ liệu trong môi trường production');
-        }
+        console.log('ℹ️  Bỏ qua đồng bộ hóa database trong môi trường production');
       }
     } catch (error) {
-      console.error('Lỗi khi đồng bộ hóa models:', error);
-      console.log('Tiếp tục khởi động máy chủ mặc dù có lỗi đồng bộ hóa');
+      console.error('❌ Lỗi khi đồng bộ hóa models:', error);
+      console.log('⚠️  Tiếp tục khởi động máy chủ mặc dù có lỗi đồng bộ hóa');
     }
   }
   
@@ -331,7 +315,7 @@ const startServer = async () => {
       console.log(`Máy chủ đang chạy trên cổng ${PORT}`);
       console.log(`Môi trường: ${process.env.NODE_ENV}`);
       console.log(`Hệ điều hành: ${os.platform()} ${os.release()}`);
-      console.log(`Database: ${process.env.USE_SQLITE === 'true' ? 'SQLite' : 'PostgreSQL'} (Khởi tạo: ${dbInitialized ? 'Thành công' : 'Thất bại'})`);
+      console.log(`Database: PostgreSQL (Khởi tạo: ${dbInitialized ? 'Thành công' : 'Thất bại'})`);
       console.log(`Redis: ${redisConnected ? 'Đã kết nối' : 'Không kết nối'}`);
       
       // Khởi động giám sát tài nguyên hệ thống

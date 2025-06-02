@@ -14,6 +14,31 @@ class EnhancedVideoService {
     this.analyticsService = new AnalyticsService();
     this.adService = new AdService();
     this.ytDlpPath = process.env.YT_DLP_PATH || 'yt-dlp';
+
+    // Performance monitoring
+    this.activeStreams = new Map();
+    this.streamMetrics = {
+      totalStreams: 0,
+      successfulStreams: 0,
+      failedStreams: 0,
+      averageStreamDuration: 0,
+      totalDataTransferred: 0
+    };
+
+    // Quality optimization settings
+    this.qualityOptimization = {
+      enableAdaptiveBitrate: process.env.ENABLE_ADAPTIVE_BITRATE === 'true',
+      enableHardwareAcceleration: process.env.ENABLE_HARDWARE_ACCEL === 'true',
+      enableRealTimeQualityAdjustment: process.env.ENABLE_REALTIME_QUALITY === 'true',
+      enableConcurrentStreaming: process.env.ENABLE_CONCURRENT_STREAMING === 'true'
+    };
+
+    // Concurrent streaming limits per tier
+    this.concurrentLimits = {
+      'anonymous': 1,
+      'free': 2,
+      'pro': 5
+    };
   }
 
   /**
@@ -53,19 +78,26 @@ class EnhancedVideoService {
   }
 
   /**
-   * Stream video with analytics and ads
+   * Enhanced stream video with analytics, ads, and performance optimization
    */
-  async streamWithAnalytics(url, formatId, user, sessionId, res) {
+  async streamWithAnalytics(url, formatId, user, sessionId, res, options = {}) {
     const userTier = this.getUserTier(user);
     const startTime = Date.now();
-    
+    const streamId = `${sessionId}_${Date.now()}`;
+
     try {
+      // Check concurrent streaming limits
+      await this.checkConcurrentStreamingLimits(userTier, sessionId);
+
       // Check tier limits
       await this.checkTierLimits(user, userTier);
-      
+
+      // Register active stream
+      this.registerActiveStream(streamId, userTier, sessionId, url);
+
       // Get video info for tracking
       const videoInfo = await this.getVideoInfo(url);
-      
+
       // Track download start
       const downloadRecord = await this.analyticsService.trackDownloadStart(
         user?.id,
@@ -80,70 +112,73 @@ class EnhancedVideoService {
       if (userTier !== 'pro') {
         const preDownloadAd = await this.adService.showPreDownloadAd(userTier, user?.id, sessionId);
         if (preDownloadAd) {
-          // Send ad data in response headers for frontend to display
           res.setHeader('X-Pre-Download-Ad', JSON.stringify(preDownloadAd));
         }
       }
 
-      // Start streaming
-      const ytDlpProcess = await this.streamVideoDirectly(url, formatId);
-      
-      // Apply transcoding if needed
-      let outputStream = ytDlpProcess.stdout;
-      if (this.needsTranscoding(formatId, userTier, videoInfo)) {
-        const transcodingOptions = this.getTranscodingOptions(userTier);
-        const ffmpegProcess = await this.ffmpegService.transcodeStream(
-          ytDlpProcess.stdout,
-          transcodingOptions
-        );
-        outputStream = ffmpegProcess.stdout;
+      // Determine streaming strategy based on tier and options
+      let outputStream;
+
+      if (this.qualityOptimization.enableAdaptiveBitrate && userTier === 'pro' && options.adaptiveBitrate) {
+        // Adaptive bitrate streaming for Pro users
+        outputStream = await this.createAdaptiveBitrateStream(url, formatId, userTier, sessionId);
+      } else if (this.qualityOptimization.enableRealTimeQualityAdjustment && userTier !== 'anonymous') {
+        // Real-time quality adjustment for Free and Pro users
+        outputStream = await this.createQualityAdjustableStream(url, formatId, userTier, sessionId);
+      } else {
+        // Standard streaming with optional transcoding
+        outputStream = await this.createStandardStream(url, formatId, userTier, sessionId, videoInfo);
       }
 
-      // Set appropriate headers
-      this.setStreamingHeaders(res, videoInfo, formatId);
-      
-      // Pipe to response
+      // Set enhanced streaming headers
+      this.setEnhancedStreamingHeaders(res, videoInfo, formatId, userTier);
+
+      // Setup stream monitoring
+      this.setupStreamMonitoring(outputStream, streamId, startTime);
+
+      // Pipe to response with error handling
       outputStream.pipe(res);
-      
+
       // Track download completion
       outputStream.on('end', async () => {
         const duration = Date.now() - startTime;
         const fileSizeMb = this.estimateFileSize(videoInfo, formatId);
         const revenueGenerated = this.calculateRevenue(userTier, fileSizeMb);
-        
-        await this.analyticsService.trackDownloadComplete(
+
+        await this.completeStreamTracking(
           user?.id,
           sessionId,
+          streamId,
           url,
           formatId,
           duration,
           fileSizeMb,
           revenueGenerated
         );
-        
+
         // Update user stats
         if (user) {
           await this.updateUserDownloadStats(user);
         }
+
+        // Cleanup
+        this.unregisterActiveStream(streamId);
       });
 
       // Handle errors
       outputStream.on('error', async (error) => {
-        await this.analyticsService.trackDownloadError(
-          user?.id,
-          sessionId,
-          url,
-          error.message
-        );
+        await this.handleStreamError(user?.id, sessionId, streamId, url, error);
+        this.unregisterActiveStream(streamId);
       });
-      
+
+      // Handle client disconnect
+      res.on('close', () => {
+        this.handleClientDisconnect(streamId);
+      });
+
     } catch (error) {
-      await this.analyticsService.trackDownloadError(
-        user?.id,
-        sessionId,
-        url,
-        error.message
-      );
+      await this.handleStreamError(user?.id, sessionId, streamId, url, error);
+      this.unregisterActiveStream(streamId);
       throw error;
     }
   }
@@ -368,6 +403,268 @@ class EnhancedVideoService {
     };
     
     return (revenueRates[userTier] || 0) * fileSizeMb;
+  }
+
+  /**
+   * Check concurrent streaming limits
+   */
+  async checkConcurrentStreamingLimits(userTier, sessionId) {
+    if (!this.qualityOptimization.enableConcurrentStreaming) {
+      return true;
+    }
+
+    const maxConcurrent = this.concurrentLimits[userTier] || 1;
+    const currentStreams = Array.from(this.activeStreams.values())
+      .filter(stream => stream.tier === userTier);
+
+    if (currentStreams.length >= maxConcurrent) {
+      throw new Error(`Đã đạt giới hạn ${maxConcurrent} stream đồng thời cho tier ${userTier}`);
+    }
+
+    return true;
+  }
+
+  /**
+   * Register active stream
+   */
+  registerActiveStream(streamId, userTier, sessionId, url) {
+    this.activeStreams.set(streamId, {
+      tier: userTier,
+      sessionId,
+      url,
+      startTime: Date.now(),
+      bytesTransferred: 0
+    });
+
+    this.streamMetrics.totalStreams++;
+  }
+
+  /**
+   * Unregister active stream
+   */
+  unregisterActiveStream(streamId) {
+    const stream = this.activeStreams.get(streamId);
+    if (stream) {
+      const duration = Date.now() - stream.startTime;
+      this.updateStreamMetrics(duration, stream.bytesTransferred, true);
+      this.activeStreams.delete(streamId);
+    }
+  }
+
+  /**
+   * Create adaptive bitrate stream (Pro only)
+   */
+  async createAdaptiveBitrateStream(url, formatId, userTier, sessionId) {
+    const ytDlpProcess = await this.streamVideoDirectly(url, formatId);
+
+    const adaptiveStreams = await this.ffmpegService.createAdaptiveBitrateStream(
+      ytDlpProcess.stdout,
+      { userTier, sessionId }
+    );
+
+    // Return the highest quality stream for now
+    // In a full implementation, this would handle multiple quality streams
+    return adaptiveStreams[0].stream;
+  }
+
+  /**
+   * Create quality adjustable stream
+   */
+  async createQualityAdjustableStream(url, formatId, userTier, sessionId) {
+    const ytDlpProcess = await this.streamVideoDirectly(url, formatId);
+
+    const adjustableProcess = await this.ffmpegService.adjustQualityRealtime(
+      ytDlpProcess.stdout,
+      { userTier, sessionId }
+    );
+
+    return adjustableProcess.stdout;
+  }
+
+  /**
+   * Create standard stream with optional transcoding
+   */
+  async createStandardStream(url, formatId, userTier, sessionId, videoInfo) {
+    const ytDlpProcess = await this.streamVideoDirectly(url, formatId);
+
+    // Apply transcoding if needed
+    if (this.needsTranscoding(formatId, userTier, videoInfo)) {
+      const transcodingOptions = {
+        ...this.getTranscodingOptions(userTier),
+        sessionId,
+        enableHardwareAcceleration: this.qualityOptimization.enableHardwareAcceleration
+      };
+
+      const ffmpegProcess = await this.ffmpegService.transcodeStream(
+        ytDlpProcess.stdout,
+        transcodingOptions
+      );
+
+      return ffmpegProcess.stdout;
+    }
+
+    return ytDlpProcess.stdout;
+  }
+
+  /**
+   * Set enhanced streaming headers
+   */
+  setEnhancedStreamingHeaders(res, videoInfo, formatId, userTier) {
+    // Set basic headers
+    this.setStreamingHeaders(res, videoInfo, formatId);
+
+    // Add tier-specific headers
+    res.setHeader('X-User-Tier', userTier);
+    res.setHeader('X-Stream-Quality', this.getStreamQuality(userTier));
+
+    // Add performance headers
+    if (userTier === 'pro') {
+      res.setHeader('X-Hardware-Acceleration', this.qualityOptimization.enableHardwareAcceleration);
+      res.setHeader('X-Adaptive-Bitrate', this.qualityOptimization.enableAdaptiveBitrate);
+    }
+
+    // Add caching headers
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+
+  /**
+   * Setup stream monitoring
+   */
+  setupStreamMonitoring(outputStream, streamId, startTime) {
+    let bytesTransferred = 0;
+
+    outputStream.on('data', (chunk) => {
+      bytesTransferred += chunk.length;
+
+      // Update active stream stats
+      const stream = this.activeStreams.get(streamId);
+      if (stream) {
+        stream.bytesTransferred = bytesTransferred;
+      }
+    });
+
+    // Monitor stream health every 10 seconds
+    const healthMonitor = setInterval(() => {
+      const stream = this.activeStreams.get(streamId);
+      if (!stream) {
+        clearInterval(healthMonitor);
+        return;
+      }
+
+      const duration = Date.now() - startTime;
+      const speed = bytesTransferred / (duration / 1000); // bytes per second
+
+      // Log performance metrics
+      console.log(`Stream ${streamId}: ${(bytesTransferred / 1024 / 1024).toFixed(2)}MB transferred, ${(speed / 1024 / 1024).toFixed(2)}MB/s`);
+    }, 10000);
+
+    outputStream.on('end', () => {
+      clearInterval(healthMonitor);
+    });
+
+    outputStream.on('error', () => {
+      clearInterval(healthMonitor);
+    });
+  }
+
+  /**
+   * Complete stream tracking
+   */
+  async completeStreamTracking(userId, sessionId, streamId, url, formatId, duration, fileSizeMb, revenueGenerated) {
+    try {
+      await this.analyticsService.trackDownloadComplete(
+        userId,
+        sessionId,
+        url,
+        formatId,
+        duration,
+        fileSizeMb,
+        revenueGenerated
+      );
+
+      this.streamMetrics.successfulStreams++;
+      this.streamMetrics.totalDataTransferred += fileSizeMb;
+
+    } catch (error) {
+      console.error('Error completing stream tracking:', error);
+    }
+  }
+
+  /**
+   * Handle stream error
+   */
+  async handleStreamError(userId, sessionId, streamId, url, error) {
+    try {
+      await this.analyticsService.trackDownloadError(
+        userId,
+        sessionId,
+        url,
+        error.message
+      );
+
+      this.streamMetrics.failedStreams++;
+
+      console.error(`Stream ${streamId} error:`, error.message);
+
+    } catch (trackingError) {
+      console.error('Error tracking stream error:', trackingError);
+    }
+  }
+
+  /**
+   * Handle client disconnect
+   */
+  handleClientDisconnect(streamId) {
+    console.log(`Client disconnected from stream ${streamId}`);
+    this.unregisterActiveStream(streamId);
+  }
+
+  /**
+   * Update stream metrics
+   */
+  updateStreamMetrics(duration, bytesTransferred, successful) {
+    if (successful) {
+      // Update average duration
+      const totalDuration = this.streamMetrics.averageStreamDuration * this.streamMetrics.successfulStreams + duration;
+      this.streamMetrics.averageStreamDuration = totalDuration / (this.streamMetrics.successfulStreams + 1);
+    }
+  }
+
+  /**
+   * Get stream quality for tier
+   */
+  getStreamQuality(userTier) {
+    const qualityMap = {
+      'anonymous': 'standard',
+      'free': 'enhanced',
+      'pro': 'premium'
+    };
+    return qualityMap[userTier] || 'standard';
+  }
+
+  /**
+   * Get streaming statistics
+   */
+  getStreamingStats() {
+    return {
+      ...this.streamMetrics,
+      activeStreams: this.activeStreams.size,
+      streamsByTier: this.getStreamsByTier(),
+      ffmpegStats: this.ffmpegService.getTranscodingStats()
+    };
+  }
+
+  /**
+   * Get active streams by tier
+   */
+  getStreamsByTier() {
+    const streamsByTier = {};
+    for (const stream of this.activeStreams.values()) {
+      streamsByTier[stream.tier] = (streamsByTier[stream.tier] || 0) + 1;
+    }
+    return streamsByTier;
   }
 
   /**
