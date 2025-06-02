@@ -21,6 +21,16 @@ const {
   videoInfoLimiter,
   apiLimiter
 } = require('../middleware/auth');
+const {
+  checkTierRestrictions,
+  checkDownloadLimits,
+  createTierRateLimiter,
+  checkFormatRestrictions,
+  injectAds,
+  trackSessionDownloads,
+  checkSubscriptionExpiry,
+  addTierInfoToResponse
+} = require('../middleware/tierMiddleware');
 const { cacheMiddleware } = require('../middleware/cache');
 const { handleValidationErrors, sanitizeData } = require('../middleware/validator');
 
@@ -96,38 +106,52 @@ const videoIdValidation = [
 // Cache danh sách trang web được hỗ trợ trong 1 ngày (86400 giây)
 router.get('/supported-sites', apiLimiter, cacheMiddleware(86400), getSupportedSites);
 
-// Cache thông tin video trong 1 giờ (3600 giây), sử dụng URL video làm key
+// Cache thông tin video trong 1 giờ (3600 giây), sử dụng URL video và tier làm key
 router.post('/info',
   sanitizeData,
   videoUrlValidation,
   optionalAuth,
-  videoInfoLimiter,
+  checkTierRestrictions(),
+  addTierInfoToResponse,
+  createTierRateLimiter(),
   cacheMiddleware(3600, (req) => {
-    // Tạo key cache dựa trên URL video và loại người dùng (anonymous, registered, premium)
-    const userType = req.user
-      ? (req.user.subscription === 'premium' ? 'premium' : 'registered')
-      : 'anonymous';
-    return `video_info:${req.body.url}:${userType}`;
+    // Tạo key cache dựa trên URL video và tier người dùng
+    const userTier = req.userTier || 'anonymous';
+    return `video_info:${req.body.url}:${userTier}`;
   }),
+  injectAds,
   getVideoInfo
 );
 
-// Route tải video - cho phép tải không cần đăng nhập (nhưng có giới hạn)
-// Áp dụng rate limiting cho API tải video (sau khi xác thực để kiểm tra admin)
+// Route tải video với tier restrictions và analytics
 router.post('/download',
   sanitizeData,
   videoUrlValidation,
   optionalAuth,
-  downloadLimiter,
+  checkTierRestrictions(),
+  checkSubscriptionExpiry,
+  addTierInfoToResponse,
+  checkDownloadLimits,
+  checkFormatRestrictions,
+  trackSessionDownloads,
+  createTierRateLimiter(),
+  injectAds,
   downloadVideo
 );
 
-// Route mới cho streaming trực tiếp
+// Route streaming trực tiếp với enhanced features
 router.post('/stream',
   sanitizeData,
   videoUrlValidation,
   optionalAuth,
-  downloadLimiter,
+  checkTierRestrictions(),
+  checkSubscriptionExpiry,
+  addTierInfoToResponse,
+  checkDownloadLimits,
+  checkFormatRestrictions,
+  trackSessionDownloads,
+  createTierRateLimiter(),
+  injectAds,
   streamVideo
 );
 
@@ -143,7 +167,16 @@ router.get('/:id/status',
   getVideoStatus
 );
 
-router.get('/:id/download', optionalAuth, streamVideo);
+router.get('/:id/download',
+  optionalAuth,
+  checkTierRestrictions(),
+  checkSubscriptionExpiry,
+  addTierInfoToResponse,
+  checkDownloadLimits,
+  trackSessionDownloads,
+  createTierRateLimiter(),
+  streamVideo
+);
 
 router.delete('/:id',
   protect,
@@ -151,11 +184,14 @@ router.delete('/:id',
   deleteVideo
 );
 
-// Routes cho phụ đề
+// Routes cho phụ đề với tier restrictions
 router.post('/list-subtitles',
   sanitizeData,
   videoUrlValidation,
-  apiLimiter,
+  optionalAuth,
+  checkTierRestrictions(),
+  addTierInfoToResponse,
+  createTierRateLimiter(),
   listSubtitles
 );
 
@@ -163,7 +199,11 @@ router.post('/download-subtitle',
   sanitizeData,
   subtitleValidation,
   optionalAuth,
-  apiLimiter,
+  checkTierRestrictions('download_subtitles'),
+  checkSubscriptionExpiry,
+  addTierInfoToResponse,
+  checkDownloadLimits,
+  createTierRateLimiter(),
   downloadSubtitle
 );
 

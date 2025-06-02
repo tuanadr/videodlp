@@ -1,114 +1,142 @@
-const User = require('../models/User');
+const { User } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
+const UserService = require('../services/userService');
+const AnalyticsService = require('../services/analyticsService');
+const { getTierRestrictions } = require('../config/tierConfig');
+const {
+  ApiResponse,
+  ValidationError,
+  AuthenticationError,
+  ConflictError,
+  asyncHandler
+} = require('../utils/errorHandler');
+
+// Initialize analytics service
+const analyticsService = new AnalyticsService();
 
 /**
  * @desc    Đăng ký người dùng mới
  * @route   POST /api/auth/register
  * @access  Public
  */
-exports.register = async (req, res, next) => {
-  try {
-    const { name, email, password, referralCode } = req.body;
+exports.register = asyncHandler(async (req, res) => {
+  const { name, email, password, referralCode } = req.body;
 
-    // Kiểm tra xem email đã tồn tại chưa
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email đã được sử dụng'
-      });
-    }
+  logger.auth('Registration attempt', { email, hasReferralCode: !!referralCode });
 
-    // Tạo người dùng mới
-    const user = await User.create({
-      name,
-      email,
-      password
-    });
-
-    // Xử lý mã giới thiệu nếu có
-    if (referralCode) {
-      try {
-        // Tìm người dùng có mã giới thiệu tương ứng
-        const inviter = await User.findOne({ where: { referralCode } });
-        
-        if (inviter) {
-          // Số lượt tải thưởng cho mỗi bên
-          const bonusAmount = 5;
-          
-          // Cập nhật thông tin người được mời
-          user.referredBy = inviter.id;
-          user.bonusDownloads += bonusAmount;
-          await user.save();
-          
-          // Thưởng cho người mời
-          inviter.bonusDownloads += bonusAmount;
-          
-          // Cập nhật thống kê giới thiệu của người mời
-          const referralStats = inviter.referralStats || { totalReferred: 0, successfulReferrals: 0 };
-          referralStats.totalReferred += 1;
-          referralStats.successfulReferrals += 1;
-          inviter.referralStats = referralStats;
-          
-          await inviter.save();
-          
-          console.log(`Referral successful: User ${user.email} was referred by ${inviter.email}`);
-        } else {
-          console.log(`Invalid referral code: ${referralCode}`);
-        }
-      } catch (referralError) {
-        console.error('Error processing referral code:', referralError);
-        // Không trả về lỗi, vẫn tiếp tục đăng ký
-      }
-    }
-
-    // Gửi response với token
-    await sendTokenResponse(user, 201, req, res);
-  } catch (error) {
-    next(error);
+  // Validate input
+  if (!name?.trim() || !email?.trim() || !password) {
+    throw new ValidationError('Name, email and password are required');
   }
-};
+
+  // Create user using service
+  const user = await UserService.createUser({ name, email, password });
+
+  // Process referral code if provided
+  if (referralCode) {
+    try {
+      await processReferralCode(user, referralCode);
+    } catch (referralError) {
+      logger.warn('Referral processing failed', {
+        userId: user.id,
+        referralCode,
+        error: referralError.message
+      });
+      // Don't fail registration if referral processing fails
+    }
+  }
+
+  logger.auth('User registered successfully', {
+    userId: user.id,
+    email: user.email
+  });
+
+  // Send response with tokens
+  await sendTokenResponse(user, 201, req, res);
+});
 
 /**
  * @desc    Đăng nhập người dùng
  * @route   POST /api/auth/login
  * @access  Public
  */
-exports.login = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
+exports.login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
 
-    // Kiểm tra email và password
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Vui lòng cung cấp email và mật khẩu'
-      });
-    }
+  logger.auth('Login attempt', { email, ip: req.ip });
 
-    // Kiểm tra người dùng
-    const user = await User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Thông tin đăng nhập không hợp lệ'
-      });
-    }
-
-    // Kiểm tra mật khẩu
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: 'Thông tin đăng nhập không hợp lệ'
-      });
-    }
-
-    // Gửi response với token
-    await sendTokenResponse(user, 200, req, res);
-  } catch (error) {
-    next(error);
+  // Validate input
+  if (!email?.trim() || !password) {
+    throw new ValidationError('Email and password are required');
   }
+
+  // Find user with password
+  const user = await UserService.findByEmail(email, true);
+  if (!user) {
+    logger.security('Login failed - user not found', { email, ip: req.ip });
+    throw new AuthenticationError('Invalid credentials');
+  }
+
+  // Check if user is active
+  if (!user.isActive) {
+    logger.security('Login failed - inactive user', { email, ip: req.ip });
+    throw new AuthenticationError('Account is deactivated');
+  }
+
+  // Verify password
+  const isMatch = await user.matchPassword(password);
+  if (!isMatch) {
+    logger.security('Login failed - invalid password', { email, ip: req.ip });
+    throw new AuthenticationError('Invalid credentials');
+  }
+
+  logger.auth('Login successful', {
+    userId: user.id,
+    email: user.email,
+    ip: req.ip
+  });
+
+  // Send response with tokens
+  await sendTokenResponse(user, 200, req, res);
+});
+
+/**
+ * Process referral code for new user
+ */
+const processReferralCode = async (user, referralCode) => {
+  const inviter = await User.findOne({ where: { referralCode } });
+
+  if (!inviter) {
+    logger.warn('Invalid referral code', { referralCode, userId: user.id });
+    return;
+  }
+
+  const bonusAmount = 5;
+
+  // Update referred user
+  await user.update({
+    referredBy: inviter.id,
+    bonusDownloads: (user.bonusDownloads || 0) + bonusAmount
+  });
+
+  // Update inviter
+  const referralStats = inviter.referralStats || { totalReferred: 0, successfulReferrals: 0 };
+  referralStats.totalReferred += 1;
+  referralStats.successfulReferrals += 1;
+
+  await inviter.update({
+    bonusDownloads: (inviter.bonusDownloads || 0) + bonusAmount,
+    referralStats
+  });
+
+  logger.info('Referral processed successfully', {
+    inviterId: inviter.id,
+    inviterEmail: inviter.email,
+    newUserId: user.id,
+    newUserEmail: user.email,
+    bonusAmount
+  });
 };
 
 /**
@@ -116,18 +144,11 @@ exports.login = async (req, res, next) => {
  * @route   GET /api/auth/me
  * @access  Private
  */
-exports.getMe = async (req, res, next) => {
-  try {
-    const user = await User.findByPk(req.user.id);
+exports.getMe = asyncHandler(async (req, res) => {
+  const user = await UserService.findById(req.user.id);
 
-    res.status(200).json({
-      success: true,
-      data: user
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+  return ApiResponse.success(res, user, 'User profile retrieved successfully');
+});
 
 /**
  * @desc    Đăng xuất người dùng và thu hồi refresh token
@@ -285,6 +306,19 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
   const refreshToken = user.getRefreshToken();
   const refreshTokenData = await RefreshToken.createToken(user, refreshToken, expiresAt, userAgent, ipAddress);
 
+  // Get current tier and restrictions
+  const currentTier = user.getCurrentTier();
+  const tierRestrictions = getTierRestrictions(currentTier);
+
+  // Track login analytics
+  await analyticsService.trackPageView(
+    user.id,
+    req.sessionID,
+    'login',
+    req.get('User-Agent'),
+    req.ip
+  );
+
   res.status(statusCode).json({
     success: true,
     accessToken,
@@ -296,8 +330,20 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
       email: user.email,
       role: user.role,
       subscription: user.subscription,
+      tier: currentTier,
+      subscription_expires_at: user.subscription_expires_at,
       referralCode: user.referralCode,
-      bonusDownloads: user.bonusDownloads || 0
+      bonusDownloads: user.bonusDownloads || 0,
+      downloadCount: user.downloadCount || 0,
+      monthlyDownloadCount: user.monthly_download_count || 0,
+      tierRestrictions: {
+        dailyDownloads: tierRestrictions.dailyDownloads,
+        maxResolution: tierRestrictions.maxResolution,
+        allowedFormats: tierRestrictions.allowedFormats,
+        showAds: tierRestrictions.showAds,
+        canDownloadPlaylist: tierRestrictions.canDownloadPlaylist,
+        canDownloadSubtitles: tierRestrictions.canDownloadSubtitles
+      }
     }
   });
 };

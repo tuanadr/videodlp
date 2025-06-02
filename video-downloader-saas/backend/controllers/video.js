@@ -1,29 +1,63 @@
 const path = require('path');
 const fs = require('fs');
 const videoService = require('../services/videoService');
+const EnhancedVideoService = require('../services/enhancedVideoService');
+const AnalyticsService = require('../services/analyticsService');
+const AdService = require('../services/adService');
 const ytdlp = require('../utils/ytdlp');
 const { catchAsync } = require('../utils/errorHandler');
 const { getSettings } = require('../utils/settings');
-const User = require('../models/User');
-const Video = require('../models/Video');
+const { User, Video } = require('../models');
+
+// Initialize enhanced services
+const enhancedVideoService = new EnhancedVideoService();
+const analyticsService = new AnalyticsService();
+const adService = new AdService();
 
 /**
- * Lấy thông tin video từ URL
+ * Lấy thông tin video từ URL với tier restrictions
  */
 exports.getVideoInfo = catchAsync(async (req, res, next) => {
   const { url } = req.body;
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] getVideoInfo request received`, { url });
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] User info from req.user`, { 
-    user: req.user ? { id: req.user.id, subscription: req.user.subscription, role: req.user.role } : 'anonymous' 
+  const sessionId = req.sessionID;
+
+  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] getVideoInfo request received`, {
+    url,
+    userTier: req.userTier,
+    sessionId
   });
 
-  const videoInfo = await videoService.getVideoInfo(url, req.user);
-  
-  res.status(200).json({ success: true, data: videoInfo });
+  // Track page view
+  await analyticsService.trackPageView(
+    req.user?.id,
+    sessionId,
+    'video_info',
+    req.get('User-Agent'),
+    req.ip
+  );
+
+  // Get video info with tier restrictions
+  const videoInfo = await enhancedVideoService.getVideoInfoWithTierRestrictions(
+    url,
+    req.user,
+    sessionId
+  );
+
+  // Inject ads for non-pro users
+  if (req.userTier !== 'pro') {
+    await adService.injectBannerAd(res, req.userTier, 'header');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: videoInfo,
+    userTier: req.userTier,
+    ads: res.locals.ads || []
+  });
 });
 
 /**
- * Bắt đầu quá trình tải xuống video
+ * Bắt đầu quá trình tải xuống video với enhanced features
  */
 exports.downloadVideo = catchAsync(async (req, res, next) => {
   // Chuyển hướng đến hàm streamVideo để xử lý trực tiếp
@@ -67,32 +101,34 @@ exports.deleteVideo = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Stream video trực tiếp từ nguồn đến client
+ * Stream video trực tiếp với enhanced features và tier restrictions
  */
 exports.streamVideo = catchAsync(async (req, res, next) => {
-  // Xử lý cả hai trường hợp: GET request với ID và POST request với thông tin đầy đủ
   let url, formatId, title, formatType, qualityKey;
-  
+  const sessionId = req.sessionID;
+
+  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Enhanced stream video request`, {
+    userTier: req.userTier,
+    sessionId,
+    method: req.method
+  });
+
+  // Xử lý cả hai trường hợp: GET request với ID và POST request với thông tin đầy đủ
   if (req.method === 'GET') {
     // Trường hợp GET /api/videos/:id/download (tương thích ngược)
     const videoId = req.params.id;
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Stream video request for ID: ${videoId}`, {
-      user: req.user ? { id: req.user.id, role: req.user.role } : 'anonymous',
-      headers: req.headers
-    });
-    
-    // Tìm thông tin video từ ID (nếu cần)
+
     try {
       const video = await Video.findByPk(videoId);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy video.' });
       }
-      
+
       // Kiểm tra quyền truy cập
       if (video.userId && (!req.user || (video.userId !== req.user.id && req.user.role !== 'admin'))) {
         return res.status(403).json({ success: false, message: 'Không có quyền truy cập video này.' });
       }
-      
+
       url = video.url;
       formatId = video.formatId;
       title = video.title;
@@ -104,216 +140,21 @@ exports.streamVideo = catchAsync(async (req, res, next) => {
     // Trường hợp POST /api/videos/stream hoặc POST /api/videos/download
     ({ url, formatId, title, formatType, qualityKey } = req.body);
   }
-  
+
   // Giải mã HTML entities trong formatId
   formatId = decodeHtmlEntities(formatId);
-  
-  console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Streaming video directly from URL: ${url}`, {
-    formatId, title, user: req.user ? req.user.id : 'anonymous'
-  });
 
   try {
-    // Kiểm tra quyền truy cập và giới hạn tải xuống
-    // Đây là phần kiểm tra quyền truy cập, có thể tái sử dụng logic từ videoService.downloadVideo
-    // Nhưng vì chúng ta không lưu trữ bản ghi Video nữa, nên chỉ cần kiểm tra quyền truy cập
-    
-    // Kiểm tra giới hạn tải xuống cho người dùng đã đăng ký
-    if (req.user && req.user.subscription !== 'premium') {
-      req.user.resetDailyDownloadCount();
-      const settings = await getSettings();
-      
-      if (req.user.dailyDownloadCount >= settings.maxDownloadsPerDay && req.user.bonusDownloads <= 0) {
-        return res.status(403).json({ success: false, message: 'Đã đạt giới hạn tải hàng ngày. Nâng cấp hoặc mời bạn bè.' });
-      }
-      
-      if (req.user.dailyDownloadCount >= settings.maxDownloadsPerDay && req.user.bonusDownloads > 0) {
-        req.user.useBonusDownload();
-        await req.user.save();
-      }
-    }
-    
-    // Lấy thông tin video để xác định tên file và loại file
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] About to call getVideoInfo for URL: ${url}`);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Getting video info for URL: ${url}`);
-    const videoInfo = await ytdlp.getVideoInfo(url);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] getVideoInfo call completed`);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] videoInfo keys:`, Object.keys(videoInfo));
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] videoInfo.title:`, videoInfo.title);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] videoInfo.formats type:`, typeof videoInfo.formats);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] videoInfo.formats is array:`, Array.isArray(videoInfo.formats));
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Video info received successfully`);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] videoInfo.formats length:`, videoInfo.formats ? videoInfo.formats.length : 'undefined');
+    // Sử dụng Enhanced Video Service để stream với analytics và ads
+    await enhancedVideoService.streamWithAnalytics(url, formatId, req.user, sessionId, res);
 
-    // Kiểm tra quyền truy cập định dạng
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Looking for formatId: ${formatId}`);
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Available format_ids:`, videoInfo.formats ? videoInfo.formats.map(f => f.format_id) : 'formats is undefined');
-
-    let selectedFormatDetails = videoInfo.formats ? videoInfo.formats.find(f => f.format_id === formatId) : null;
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] selectedFormatDetails:`, selectedFormatDetails);
-
-    // Nếu không tìm thấy format_id trực tiếp, có thể đây là format selector
-    // Trong trường hợp này, chúng ta sẽ bỏ qua kiểm tra quyền chi tiết và cho phép download
-    if (!selectedFormatDetails) {
-      console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Format not found in list, assuming it's a format selector: ${formatId}`);
-      // Tạo một format giả để bypass kiểm tra quyền
-      selectedFormatDetails = {
-        format_id: formatId,
-        height: qualityKey ? parseInt(qualityKey.replace('p', '')) : 360, // Lấy height từ qualityKey
-        resolution: qualityKey || 'unknown',
-        type: 'video' // Giả định đây là video format
-      };
-    }
-    
-    // Kiểm tra quyền truy cập định dạng dựa trên loại người dùng
-    const userType = req.user ? (req.user.subscription === 'premium' ? 'premium' : 'registered') : 'anonymous';
-    const settings = await getSettings();
-    
-    let resolution = selectedFormatDetails.height || 0;
-    if (!resolution && selectedFormatDetails.qualityKey && selectedFormatDetails.qualityKey.match(/^\d+p$/)) {
-      resolution = parseInt(selectedFormatDetails.qualityKey.replace('p', ''));
-    }
-    
-    let bitrate = selectedFormatDetails.abr || 0;
-    if (!bitrate && selectedFormatDetails.type === 'audio' && selectedFormatDetails.qualityKey && selectedFormatDetails.qualityKey.toLowerCase().includes('kbps')) {
-      const match = selectedFormatDetails.qualityKey.toLowerCase().match(/(\d+)\s*kbps/);
-      if (match) bitrate = parseInt(match[1]);
-    }
-    
-    let isFormatAllowedForUser = false;
-    const isTikTok = url.includes('tiktok.com');
-    
-    if (userType === 'premium') {
-      isFormatAllowedForUser = true;
-    } else if (userType === 'registered') {
-      if (selectedFormatDetails.type === 'video' && resolution <= (settings.freeUserMaxResolution || 1080)) {
-        isFormatAllowedForUser = true;
-      } else if (selectedFormatDetails.type === 'audio' && bitrate <= (settings.freeUserMaxAudioBitrate || 192)) {
-        isFormatAllowedForUser = true;
-      }
-    } else { // anonymous
-      const anonymousMaxVideo = isTikTok ? (settings.tiktokAnonymousMaxResolution || 1080) : (settings.anonymousMaxVideoResolution || 1080);
-      const anonymousMaxAudio = settings.anonymousMaxAudioBitrate || 128;
-      
-      if (selectedFormatDetails.type === 'video') {
-        if (resolution <= anonymousMaxVideo) {
-          isFormatAllowedForUser = true;
-        }
-      } else if (selectedFormatDetails.type === 'audio') {
-        if (bitrate <= anonymousMaxAudio) {
-          isFormatAllowedForUser = true;
-        }
-      }
-    }
-    
-    console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Permission check result:`, {
-      userType,
-      selectedFormatDetails,
-      resolution,
-      bitrate,
-      isFormatAllowedForUser,
-      settings: {
-        anonymousMaxVideoResolution: settings.anonymousMaxVideoResolution,
-        anonymousMaxAudioBitrate: settings.anonymousMaxAudioBitrate
-      }
-    });
-
-    if (!isFormatAllowedForUser) {
-      console.log(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Access denied for format:`, formatId);
-      return res.status(403).json({ success: false, message: 'Bạn không có quyền tải định dạng này.' });
-    }
-    
-    // Xác định tên file và loại file
-    const videoTitle = title || videoInfo.title || 'video';
-    const safeTitle = videoTitle.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ');
-    
-    // Xác định loại file dựa trên định dạng đã chọn
-    let fileExtension = 'mp4'; // Mặc định
-    let mimeType = 'video/mp4';
-    
-    if (selectedFormatDetails.ext) {
-      fileExtension = selectedFormatDetails.ext;
-    } else if (selectedFormatDetails.type === 'audio') {
-      fileExtension = 'mp3';
-      mimeType = 'audio/mpeg';
-    }
-    
-    // Xác định MIME type dựa trên phần mở rộng file
-    mimeType = getMimeType(`.${fileExtension}`);
-    
-    // Thiết lập headers cho response
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeTitle)}.${fileExtension}"`);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    
-    // Sử dụng Transfer-Encoding: chunked để hiển thị tiến trình tải xuống
-    res.setHeader('Transfer-Encoding', 'chunked');
-    
-    // Gọi hàm streamVideoDirectly để lấy child process
-    const ytDlpProcess = await ytdlp.streamVideoDirectly(url, formatId, qualityKey);
-    
-    // Pipe stdout của yt-dlp vào response
-    ytDlpProcess.stdout.pipe(res);
-    
-    // Xử lý lỗi từ stderr
-    ytDlpProcess.stderr.on('data', (data) => {
-      console.error(`[${new Date().toISOString()}] [YTDLP_STDERR]: ${data.toString()}`);
-      // Không gửi response lỗi ở đây nếu header đã được gửi, nhưng cần log lại
-    });
-    
-    // Xử lý lỗi từ process
-    ytDlpProcess.on('error', (error) => {
-      console.error(`[${new Date().toISOString()}] [YTDLP_PROCESS_ERROR]`, error);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: 'Lỗi khi xử lý video từ nguồn.' });
-      } else {
-        // Nếu header đã gửi, chỉ có thể cố gắng kết thúc stream một cách đột ngột
-        res.end();
-      }
-    });
-    
-    // Xử lý khi process kết thúc
-    ytDlpProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`[${new Date().toISOString()}] [YTDLP_PROCESS_CLOSE] yt-dlp exited with code ${code}`);
-        if (!res.headersSent) {
-          res.status(500).json({ success: false, message: 'Lỗi khi tải video từ nguồn.' });
-        }
-      }
-      console.log(`[${new Date().toISOString()}] [YTDLP_PROCESS_CLOSE] Stream finished for URL: ${url}`);
-      if (!res.writableEnded) { // Đảm bảo response được kết thúc nếu yt-dlp kết thúc mà chưa gửi hết
-        res.end();
-      }
-    });
-    
-    // Xử lý client ngắt kết nối
-    req.on('close', () => {
-      console.log(`[${new Date().toISOString()}] [CLIENT_DISCONNECT] Client disconnected, killing yt-dlp process.`);
-      ytDlpProcess.kill('SIGKILL'); // Hoặc SIGTERM
-    });
-    
-    // Cập nhật thống kê tải xuống (nếu cần)
-    if (req.user) {
-      User.findByPk(req.user.id)
-        .then(user => {
-          if (user) {
-            user.downloadCount += 1;
-            user.dailyDownloadCount += 1;
-            user.lastDownloadDate = new Date();
-            return user.save();
-          }
-        })
-        .catch(err => console.error(`[${new Date().toISOString()}] Error updating user stats:`, err));
-    }
-    
-    // Log thông tin tải xuống cho mục đích thống kê
-    console.log(`[${new Date().toISOString()}] [DOWNLOAD_STATS] User: ${req.user ? req.user.id : 'anonymous'}, URL: ${url}, Format: ${formatId}, Title: ${title}`);
-    
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Error streaming video:`, error);
+    console.error(`[${new Date().toISOString()}] [VIDEO_CONTROLLER] Error in enhanced streaming:`, error);
     if (!res.headersSent) {
-      res.status(500).json({ success: false, message: error.message || 'Lỗi khi xử lý video.' });
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xử lý video.'
+      });
     }
   }
 });

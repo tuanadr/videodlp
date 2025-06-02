@@ -1,133 +1,202 @@
+const logger = require('./logger');
+
 /**
- * Class AppError - Lớp lỗi tùy chỉnh cho ứng dụng
- * @extends Error
+ * Custom Error Classes for Better Error Handling
  */
 class AppError extends Error {
-  /**
-   * Tạo một instance của AppError
-   * @param {string} message - Thông báo lỗi
-   * @param {number} statusCode - Mã trạng thái HTTP
-   * @param {boolean} isOperational - Có phải là lỗi hoạt động không (true) hay lỗi lập trình (false)
-   */
   constructor(message, statusCode, isOperational = true) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
     this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
-    
+
     Error.captureStackTrace(this, this.constructor);
   }
 }
 
+class ValidationError extends AppError {
+  constructor(message, field = null) {
+    super(message, 400);
+    this.field = field;
+    this.type = 'validation';
+  }
+}
+
+class AuthenticationError extends AppError {
+  constructor(message = 'Authentication failed') {
+    super(message, 401);
+    this.type = 'authentication';
+  }
+}
+
+class AuthorizationError extends AppError {
+  constructor(message = 'Access denied') {
+    super(message, 403);
+    this.type = 'authorization';
+  }
+}
+
+class NotFoundError extends AppError {
+  constructor(message = 'Resource not found') {
+    super(message, 404);
+    this.type = 'not_found';
+  }
+}
+
+class ConflictError extends AppError {
+  constructor(message = 'Resource conflict') {
+    super(message, 409);
+    this.type = 'conflict';
+  }
+}
+
+class RateLimitError extends AppError {
+  constructor(message = 'Too many requests') {
+    super(message, 429);
+    this.type = 'rate_limit';
+  }
+}
+
+class ExternalServiceError extends AppError {
+  constructor(message = 'External service error', service = null) {
+    super(message, 502);
+    this.service = service;
+    this.type = 'external_service';
+  }
+}
+
 /**
- * Hàm bọc async để bắt lỗi và chuyển đến middleware xử lý lỗi
- * @param {Function} fn - Hàm async cần bọc
- * @returns {Function} - Hàm đã được bọc
+ * Standardized API Response Helper
  */
-const catchAsync = (fn) => {
+class ApiResponse {
+  static success(res, data = null, message = 'Success', statusCode = 200) {
+    return res.status(statusCode).json({
+      success: true,
+      message,
+      data,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  static error(res, error, statusCode = 500) {
+    const response = {
+      success: false,
+      message: error.message || 'Internal server error',
+      timestamp: new Date().toISOString()
+    };
+
+    // Add error details in development
+    if (process.env.NODE_ENV === 'development') {
+      response.error = {
+        type: error.type || 'unknown',
+        stack: error.stack,
+        field: error.field
+      };
+    }
+
+    // Add specific error fields
+    if (error.field) response.field = error.field;
+    if (error.service) response.service = error.service;
+
+    return res.status(statusCode).json(response);
+  }
+
+  static validationError(res, errors) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: Array.isArray(errors) ? errors : [errors],
+      timestamp: new Date().toISOString()
+    });
+  }
+}
+
+/**
+ * Async Error Wrapper
+ */
+const asyncHandler = (fn) => {
   return (req, res, next) => {
-    fn(req, res, next).catch(next);
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
 
 /**
- * Xử lý lỗi từ MongoDB
- * @param {Error} err - Lỗi từ MongoDB
- * @returns {AppError} - Lỗi đã được xử lý
+ * Global Error Handler Middleware
  */
-const handleMongoDBError = (err) => {
-  if (err.name === 'CastError') {
-    return new AppError(`Invalid ${err.path}: ${err.value}`, 400);
-  }
-  
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    return new AppError(`Duplicate field value: ${field}. Please use another value.`, 400);
-  }
-  
-  if (err.name === 'ValidationError') {
-    const errors = Object.values(err.errors).map(val => val.message);
-    return new AppError(`Invalid input data: ${errors.join('. ')}`, 400);
-  }
-  
-  return new AppError('Database error', 500);
-};
+const globalErrorHandler = (err, req, res, next) => {
+  // Log the error
+  logger.error(`Global error handler: ${err.message}`, {
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
 
-/**
- * Xử lý lỗi JWT
- * @param {Error} err - Lỗi từ JWT
- * @returns {AppError} - Lỗi đã được xử lý
- */
-const handleJWTError = (err) => {
+  // Handle known operational errors
+  if (err.isOperational) {
+    return ApiResponse.error(res, err, err.statusCode);
+  }
+
+  // Handle Sequelize validation errors
+  if (err.name === 'SequelizeValidationError') {
+    const errors = err.errors.map(e => ({
+      field: e.path,
+      message: e.message
+    }));
+    return ApiResponse.validationError(res, errors);
+  }
+
+  // Handle Sequelize unique constraint errors
+  if (err.name === 'SequelizeUniqueConstraintError') {
+    const field = err.errors[0]?.path || 'unknown';
+    const error = new ConflictError(`${field} already exists`);
+    error.field = field;
+    return ApiResponse.error(res, error, 409);
+  }
+
+  // Handle JWT errors
   if (err.name === 'JsonWebTokenError') {
-    return new AppError('Invalid token. Please log in again.', 401);
+    const error = new AuthenticationError('Invalid token');
+    return ApiResponse.error(res, error, 401);
   }
-  
+
   if (err.name === 'TokenExpiredError') {
-    return new AppError('Your token has expired. Please log in again.', 401);
+    const error = new AuthenticationError('Token expired');
+    error.isExpired = true;
+    return ApiResponse.error(res, error, 401);
   }
-  
-  return new AppError('Authentication error', 401);
+
+  // Handle unexpected errors
+  logger.error('Unexpected error occurred', {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method
+  });
+
+  return ApiResponse.error(res, new AppError('Something went wrong', 500), 500);
 };
 
 /**
- * Middleware xử lý lỗi tập trung
- * @param {Error} err - Lỗi cần xử lý
- * @param {Object} req - Request object
- * @param {Object} res - Response object
- * @param {Function} next - Next middleware function
+ * 404 Handler
  */
-const errorHandler = (err, req, res, next) => {
-  // Log lỗi
-  console.error(`[${new Date().toISOString()}] [ERROR] ${err.stack}`);
-  
-  // Mặc định
-  let error = { ...err };
-  error.message = err.message;
-  error.statusCode = err.statusCode || 500;
-  error.status = err.status || 'error';
-  
-  // Xử lý các loại lỗi cụ thể
-  if (err.name === 'CastError' || err.name === 'ValidationError' || err.code === 11000) {
-    error = handleMongoDBError(err);
-  }
-  
-  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-    error = handleJWTError(err);
-  }
-  
-  // Phản hồi lỗi
-  if (process.env.NODE_ENV === 'development') {
-    // Trong môi trường phát triển, trả về thông tin chi tiết
-    return res.status(error.statusCode).json({
-      success: false,
-      status: error.status,
-      message: error.message,
-      stack: error.stack,
-      error: error
-    });
-  } else {
-    // Trong môi trường production, chỉ trả về thông tin cần thiết
-    if (error.isOperational) {
-      return res.status(error.statusCode).json({
-        success: false,
-        status: error.status,
-        message: error.message
-      });
-    } else {
-      // Lỗi lập trình hoặc lỗi không xác định khác
-      console.error('ERROR 💥', error);
-      return res.status(500).json({
-        success: false,
-        status: 'error',
-        message: 'Đã xảy ra lỗi. Vui lòng thử lại sau.'
-      });
-    }
-  }
+const notFoundHandler = (req, res, next) => {
+  const error = new NotFoundError(`Route ${req.originalUrl} not found`);
+  next(error);
 };
 
 module.exports = {
   AppError,
-  catchAsync,
-  errorHandler
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  ConflictError,
+  RateLimitError,
+  ExternalServiceError,
+  ApiResponse,
+  globalErrorHandler,
+  asyncHandler,
+  notFoundHandler
 };

@@ -2,6 +2,12 @@ const jwt = require('jsonwebtoken');
 const { User, RefreshToken } = require('../models');
 const rateLimit = require('express-rate-limit');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
+const {
+  AuthenticationError,
+  AuthorizationError,
+  ApiResponse
+} = require('../utils/errorHandler');
 
 /**
  * Bảo vệ các route yêu cầu đăng nhập
@@ -21,10 +27,7 @@ exports.protect = async (req, res, next) => {
 
   // Kiểm tra nếu không có token
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Không có quyền truy cập, vui lòng đăng nhập'
-    });
+    throw new AuthenticationError('Không có quyền truy cập, vui lòng đăng nhập');
   }
 
   try {
@@ -36,34 +39,40 @@ exports.protect = async (req, res, next) => {
 
     // Kiểm tra nếu người dùng không tồn tại hoặc không hoạt động
     if (!req.user || !req.user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa'
-      });
+      throw new AuthenticationError('Tài khoản không tồn tại hoặc đã bị vô hiệu hóa');
     }
 
-    // Cập nhật thời gian đăng nhập cuối cùng
-    req.user.lastLoginAt = new Date();
-    await req.user.save();
+    // Cập nhật thời gian đăng nhập cuối cùng (không await để tránh blocking)
+    req.user.update({ lastLoginAt: new Date() }).catch(err => {
+      logger.warn('Failed to update lastLoginAt', { userId: req.user.id, error: err.message });
+    });
+
+    logger.auth('User authenticated successfully', {
+      userId: req.user.id,
+      email: req.user.email,
+      role: req.user.role
+    });
 
     next();
   } catch (err) {
-    console.error('Auth middleware error:', err.message);
-    
+    logger.auth('Authentication failed', {
+      error: err.message,
+      tokenProvided: !!token,
+      ip: req.ip
+    });
+
     // Xử lý token hết hạn
     if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token đã hết hạn, vui lòng làm mới token',
-        isExpired: true
-      });
+      const error = new AuthenticationError('Token đã hết hạn, vui lòng làm mới token');
+      error.isExpired = true;
+      throw error;
     }
-    
-    return res.status(401).json({
-      success: false,
-      message: 'Không có quyền truy cập, vui lòng đăng nhập',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+
+    if (err instanceof AuthenticationError) {
+      throw err;
+    }
+
+    throw new AuthenticationError('Không có quyền truy cập, vui lòng đăng nhập');
   }
 };
 

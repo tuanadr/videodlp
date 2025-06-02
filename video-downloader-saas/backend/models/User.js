@@ -38,6 +38,59 @@ class User extends Model {
     return await bcrypt.compare(enteredPassword, this.password);
   }
 
+  // Kiểm tra và reset download count hàng ngày
+  resetDailyDownloadCount() {
+    const today = new Date().toISOString().split('T')[0];
+    const lastResetDate = this.last_reset_date ? this.last_reset_date.toISOString().split('T')[0] : null;
+
+    if (lastResetDate !== today) {
+      this.monthly_download_count = 0;
+      this.last_reset_date = new Date();
+      return true;
+    }
+    return false;
+  }
+
+  // Lấy tier hiện tại của user
+  getCurrentTier() {
+    // Kiểm tra subscription expiry cho Pro users
+    if (this.tier === 'pro' && this.subscription_expires_at) {
+      if (new Date() > this.subscription_expires_at) {
+        // Subscription đã hết hạn, downgrade về free
+        this.tier = 'free';
+        this.subscription_expires_at = null;
+        this.save();
+        return 'free';
+      }
+    }
+    return this.tier;
+  }
+
+  // Kiểm tra có thể download không
+  canDownload() {
+    const currentTier = this.getCurrentTier();
+    this.resetDailyDownloadCount();
+
+    const tierLimits = {
+      anonymous: 5,
+      free: 20,
+      pro: -1 // unlimited
+    };
+
+    const limit = tierLimits[currentTier];
+    if (limit === -1) return true; // unlimited
+
+    return this.monthly_download_count < limit;
+  }
+
+  // Tăng download count
+  incrementDownloadCount() {
+    this.monthly_download_count += 1;
+    this.downloadCount += 1;
+    this.lastDownloadDate = new Date();
+    return this.save();
+  }
+
   // Reset đếm lượt tải xuống hàng ngày
   resetDailyDownloadCount() {
     const today = new Date();
@@ -99,6 +152,30 @@ User.init({
   subscription: {
     type: DataTypes.ENUM('free', 'premium'),
     defaultValue: 'free'
+  },
+  tier: {
+    type: DataTypes.ENUM('anonymous', 'free', 'pro'),
+    defaultValue: 'free',
+    allowNull: false
+  },
+  subscription_expires_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  monthly_download_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: false
+  },
+  last_reset_date: {
+    type: DataTypes.DATEONLY,
+    defaultValue: DataTypes.NOW,
+    allowNull: false
+  },
+  total_revenue_generated: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+    allowNull: false
   },
   stripeCustomerId: {
     type: DataTypes.STRING,

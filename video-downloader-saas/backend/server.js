@@ -2,10 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const morgan = require('morgan'); // Thêm morgan cho logging
-const compression = require('express-compression'); // Thêm compression
+const compression = require('express-compression');
 const cookieParser = require('cookie-parser');
 const os = require('os');
+
+// Import enhanced utilities
+const logger = require('./utils/logger');
+const { performanceMonitor } = require('./utils/performance');
+const { globalErrorHandler, notFoundHandler } = require('./utils/errorHandler');
 
 // Import system monitor
 const systemMonitor = require('./utils/systemMonitor');
@@ -19,9 +23,6 @@ const {
   secureHeaders
 } = require('./middleware/security');
 
-// Import error handling middleware
-const { errorHandler } = require('./utils/errorHandler');
-
 // Import path utilities
 const {
   setupDirectories,
@@ -33,17 +34,22 @@ const {
 if (os.platform() === 'linux') {
   // Thiết lập kích thước thread pool cho Node.js
   process.env.UV_THREADPOOL_SIZE = Math.max(4, os.cpus().length);
-  console.log(`Đã thiết lập UV_THREADPOOL_SIZE=${process.env.UV_THREADPOOL_SIZE}`);
+  logger.info(`UV_THREADPOOL_SIZE set to ${process.env.UV_THREADPOOL_SIZE}`);
 }
 
 // Thiết lập các thư mục cần thiết
 setupDirectories();
+
+// Start performance monitoring
+performanceMonitor.startPeriodicMonitoring();
 
 // Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const videoRoutes = require('./routes/video');
 const paymentRoutes = require('./routes/payment');
+const paymentsRoutes = require('./routes/payments'); // New enhanced payments
+const analyticsRoutes = require('./routes/analytics'); // New analytics
 const adminRoutes = require('./routes/admin'); // Thêm routes cho admin
 const settingsRoutes = require('./routes/settings'); // Thêm routes cho settings
 const referralRoutes = require('./routes/referral'); // Thêm routes cho referral
@@ -105,16 +111,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Compression middleware
-app.use(compression({ level: 6 })); // Nén dữ liệu với mức độ 6
+app.use(compression({ level: 6 }));
 
-// Logging middleware
-app.use(morgan('dev')); // Log các yêu cầu HTTP
+// Enhanced logging middleware
+app.use(logger.requestLogger());
 
-// Custom logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+// Performance monitoring middleware
+app.use(performanceMonitor.requestMiddleware());
 
 // Thư mục lưu trữ video tạm thời
 const downloadsPath = normalizePath(getDownloadsDir());
@@ -132,11 +135,15 @@ if (process.env.NODE_ENV === 'production') {
   app.use('/api', setCsrfToken);
 }
 */
-// Middleware để log các yêu cầu API
+// API request logging middleware
 app.use('/api', (req, res, next) => {
-  console.log(`[${new Date().toISOString()}] [API_MIDDLEWARE] API Request: [${req.method}] ${req.originalUrl}`);
-  console.log(`[${new Date().toISOString()}] [API_MIDDLEWARE] Request body:`, JSON.stringify(req.body, null, 2));
-  console.log(`[${new Date().toISOString()}] [API_MIDDLEWARE] Calling next()`);
+  logger.api(`API Request: ${req.method} ${req.originalUrl}`, {
+    body: req.body,
+    query: req.query,
+    params: req.params,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
   next();
 });
 
@@ -144,7 +151,9 @@ app.use('/api', (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/videos', videoRoutes);
-app.use('/api/payments', paymentRoutes);
+app.use('/api/payments', paymentRoutes); // Legacy payment routes
+app.use('/api/payments', paymentsRoutes); // Enhanced payment routes
+app.use('/api/analytics', analyticsRoutes); // Analytics routes
 app.use('/api/admin', adminRoutes); // Thêm routes cho admin
 app.use('/api/settings', settingsRoutes); // Thêm routes cho settings
 app.use('/api/referrals', referralRoutes); // Thêm routes cho referral
@@ -164,8 +173,9 @@ app.get('/', (req, res) => {
     endpoints: [
       '/api/auth - Xác thực người dùng',
       '/api/users - Quản lý người dùng',
-      '/api/videos - Tải và quản lý video',
-      '/api/payments - Thanh toán và đăng ký',
+      '/api/videos - Tải và quản lý video với tier system',
+      '/api/payments - Thanh toán VNPay, MoMo và đăng ký Pro',
+      '/api/analytics - Thống kê và phân tích dữ liệu',
       '/api/admin - Quản trị hệ thống',
       '/api/settings - Cài đặt hệ thống',
       '/api/referrals - Hệ thống giới thiệu'
@@ -173,24 +183,18 @@ app.get('/', (req, res) => {
   });
 });
 
-// Xử lý lỗi tập trung
-app.use(errorHandler);
+// 404 handler for undefined routes
+app.use(notFoundHandler);
 
-// Xử lý route không tồn tại
-app.use((req, res) => {
-  console.log(`Route not found: [${req.method}] ${req.originalUrl}`);
-  res.status(404).json({
-    success: false,
-    message: `Cannot ${req.method} ${req.originalUrl}`
-  });
-});
+// Global error handler
+app.use(globalErrorHandler);
 
 // Định kỳ xóa các refresh token hết hạn (chạy mỗi 24 giờ)
 const { cleanupExpiredTokens } = require('./middleware/auth');
 setInterval(cleanupExpiredTokens, 24 * 60 * 60 * 1000);
 
 // Import database và models
-const { sequelize, initDatabase } = require('./database');
+const { sequelize, initDatabase, runMigrations } = require('./database');
 const { sequelize: modelsSequelize } = require('./models');
 
 // Khởi tạo Redis nếu được cấu hình
@@ -266,14 +270,27 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   let dbInitialized = false;
   
-  // Khởi tạo và tối ưu hóa database
+  // Khởi tạo và tối ưu hóa database với migrations
   try {
+    console.log('🚀 Bắt đầu khởi tạo database...');
+
+    // Initialize database connection and schema
     await initDatabase();
+    console.log('✅ Database connection và schema đã sẵn sàng');
+
+    // Run migrations automatically
+    const migrationSuccess = await runMigrations();
+    if (migrationSuccess) {
+      console.log('✅ Migrations đã hoàn thành thành công');
+    } else {
+      console.warn('⚠️  Một số migrations có thể đã thất bại, kiểm tra logs');
+    }
+
     dbInitialized = true;
-    console.log('Khởi tạo cơ sở dữ liệu thành công');
+    console.log('🎉 Khởi tạo cơ sở dữ liệu hoàn tất');
   } catch (error) {
-    console.error('Lỗi khi khởi tạo cơ sở dữ liệu:', error);
-    console.log('Tiếp tục khởi động máy chủ mặc dù có lỗi cơ sở dữ liệu');
+    console.error('❌ Lỗi khi khởi tạo cơ sở dữ liệu:', error);
+    console.log('⚠️  Tiếp tục khởi động máy chủ mặc dù có lỗi cơ sở dữ liệu');
   }
   
   // Đồng bộ hóa các models với cơ sở dữ liệu
