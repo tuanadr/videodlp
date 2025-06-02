@@ -1,0 +1,37 @@
+{
+  "maxDownloadsPerDay": 10,
+  "premiumPrice": 199000,
+  "premiumStorageDays": 3,
+  "freeStorageDays": 1,
+  "maintenanceMode": false,
+  "allowedFormats": [
+    "mp4",
+    "webm",
+    "mp3",
+    "m4a"
+  ],
+  "maxFileSize": 1073741824,
+  "anonymousMaxVideoResolution": 1080,
+  "freeMaxVideoResolution": 720,
+  "premiumMaxVideoResolution": 2160,
+  "tiktokAnonymousMaxResolution": 1080,
+  "tiktokFreeMaxResolution": 1080,
+  "tiktokPremiumMaxResolution": 2160,
+  "anonymousMaxAudioBitrate": 128,
+  "freeMaxAudioBitrate": 192,
+  "premiumMaxAudioBitrate": 320,
+  "seo": {
+    "siteName": "VideoDownloader - Tải video từ nhiều nguồn 111",
+    "siteDescription": "Dịch vụ tải video trực tuyến từ nhiều nguồn khác nhau như YouTube, Facebook, TikTok và hơn 1000 trang web khác.",
+    "defaultKeywords": "tải video, download video, youtube downloader, facebook downloader, tiktok downloader",
+    "defaultImage": "/logo512.png",
+    "twitterHandle": "@videodownloader",
+    "googleAnalyticsId": "",
+    "facebookAppId": "sds",
+    "enableStructuredData": true,
+    "enableOpenGraph": true,
+    "enableTwitterCards": true,
+    "enableCanonicalUrls": true
+  },
+  "updatedAt": "2025-05-15T14:17:25.959Z"
+}
