@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContextV2';
+import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useAnalytics } from '../components/analytics/AnalyticsTracker';
 import { Link } from 'react-router-dom';

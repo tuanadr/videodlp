@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContextV2';
+import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import axios from 'axios';
-import { loadStripe } from '@stripe/stripe-js';
+// import { loadStripe } from '@stripe/stripe-js';
 
-// Khởi tạo Stripe
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY || 'pk_test_placeholder');
+// Khởi tạo Stripe - Commented out vì đang sử dụng VNPay/MoMo
+// const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY || 'pk_test_placeholder');
 
 const SubscriptionPage = () => {
   const { user } = useAuth();
@@ -39,21 +39,27 @@ const SubscriptionPage = () => {
 
   const handleCheckout = async () => {
     setCheckoutLoading(true);
-    
+
     try {
+      // TODO: Implement VNPay/MoMo payment flow
+      // Redirect to upgrade page for now
+      window.location.href = '/upgrade';
+
+      /* Stripe implementation - commented out
       const res = await axios.post('/api/payments/create-checkout-session');
-      
+
       // Lấy Stripe instance
       const stripe = await stripePromise;
-      
+
       // Chuyển hướng đến trang thanh toán Stripe
       await stripe.redirectToCheckout({
         sessionId: res.data.sessionId
       });
+      */
     } catch (error) {
       console.error('Lỗi khi tạo phiên thanh toán:', error);
       setError(
-        error.response?.data?.message || 
+        error.response?.data?.message ||
         'Không thể tạo phiên thanh toán. Vui lòng thử lại sau.'
       );
       setCheckoutLoading(false);

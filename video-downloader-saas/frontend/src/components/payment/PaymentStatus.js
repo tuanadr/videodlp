@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContextV2';
+import { useAuth } from '../../context/AuthContext';
 import TierBadge from '../ui/TierBadge';
 
 /**

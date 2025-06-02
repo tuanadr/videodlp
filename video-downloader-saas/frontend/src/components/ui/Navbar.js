@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react'; // Import useContext
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContextV2';
+import { useAuth } from '../../context/AuthContext';
 import { useSupportedSites } from '../../context/SupportedSitesContext'; // Import useSupportedSites
 import TierBadge from './TierBadge';
 import Button from './Button';

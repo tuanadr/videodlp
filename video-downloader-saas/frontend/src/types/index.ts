@@ -92,3 +92,120 @@ export interface AppState {
   video: VideoState;
   subscription: SubscriptionState;
 }
+
+// Payment related types
+export interface PaymentTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  months: number;
+  paymentMethod: 'vnpay' | 'momo';
+  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
+  transactionId?: string;
+  orderInfo?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentRequest {
+  amount: number;
+  months: number;
+  orderInfo?: string;
+}
+
+export interface PaymentResponse {
+  paymentUrl?: string;
+  payUrl?: string;
+  orderId: string;
+  amount: number;
+}
+
+// Analytics related types
+export interface UserAnalytics {
+  totalDownloads: number;
+  successfulDownloads: number;
+  totalUsageTime: number;
+  dailyActivity: DailyActivity[];
+  popularSites: PopularSite[];
+  recentActivity: RecentActivity[];
+}
+
+export interface DailyActivity {
+  date: string;
+  downloads: number;
+  duration: number;
+}
+
+export interface PopularSite {
+  domain: string;
+  count: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  domain: string;
+  quality: string;
+  createdAt: string;
+}
+
+export interface AdminAnalytics {
+  totalUsers: number;
+  totalDownloads: number;
+  totalRevenue: number;
+  conversionRate: number;
+  tierDistribution: {
+    anonymous: number;
+    free: number;
+    pro: number;
+  };
+  dailyActivity: DailyActivity[];
+  topVideos: TopVideo[];
+  recentActivity: AdminRecentActivity[];
+}
+
+export interface TopVideo {
+  title: string;
+  domain: string;
+  downloadCount: number;
+}
+
+export interface AdminRecentActivity {
+  type: 'download' | 'signup' | 'upgrade';
+  userEmail: string;
+  createdAt: string;
+}
+
+// Tier and limits
+export interface TierLimits {
+  maxQuality: string;
+  dailyDownloads: number;
+  concurrentDownloads: number;
+  features: string[];
+}
+
+// Supported sites
+export interface SupportedSite {
+  name: string;
+  domain: string;
+  icon?: string;
+  features: string[];
+  maxQuality: string;
+}
+
+// Pagination
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Error types
+export interface AppError {
+  type: string;
+  message: string;
+  statusCode?: number;
+  timestamp: string;
+}

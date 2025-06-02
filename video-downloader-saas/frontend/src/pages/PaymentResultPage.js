@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContextV2';
+import { useAuth } from '../context/AuthContext';
 
 const PaymentResultPage = () => {
   const location = useLocation();

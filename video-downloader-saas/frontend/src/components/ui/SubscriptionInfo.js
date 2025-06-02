@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../../context/AuthContextV2';
+import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import TierBadge from './TierBadge';
 

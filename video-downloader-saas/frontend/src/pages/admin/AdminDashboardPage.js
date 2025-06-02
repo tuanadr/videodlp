@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import AdminAnalytics from '../../components/analytics/AdminAnalytics';
 
 const AdminDashboardPage = () => {
   const [stats, setStats] = useState(null);
@@ -52,12 +53,19 @@ const AdminDashboardPage = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-      
+      <h1 className="text-2xl font-semibold text-gray-900">Admin Dashboard</h1>
+
+      {/* Enhanced Analytics Dashboard */}
+      <div className="mt-6">
+        <AdminAnalytics />
+      </div>
+
       {stats && (
         <>
-          {/* Thống kê tổng quan */}
-          <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Legacy Stats - Keep for compatibility */}
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Thống kê chi tiết</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {/* Tổng số người dùng */}
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">

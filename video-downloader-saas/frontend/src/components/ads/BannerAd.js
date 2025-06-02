@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useAuth } from '../../context/AuthContextV2';
+import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
 const BannerAd = ({ position = 'header', className = '' }) => {

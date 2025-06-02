@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Navigate, Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContextV2';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminLayout = () => {
   const { user, isAuthenticated, loading } = useAuth();

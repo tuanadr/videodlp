@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContextV2';
+import { useAuth } from './context/AuthContext';
 import { SupportedSitesProvider } from './context/SupportedSitesContext'; // Import SupportedSitesProvider
 import AnalyticsTracker from './components/analytics/AnalyticsTracker';
 
@@ -24,6 +24,8 @@ const UpgradePage = lazy(() => import('./pages/UpgradePage'));
 const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
 const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
 const PaymentResultPage = lazy(() => import('./pages/PaymentResultPage'));
+const PaymentHistoryPage = lazy(() => import('./pages/PaymentHistoryPage'));
+const UserAnalyticsPage = lazy(() => import('./pages/UserAnalyticsPage'));
 const SupportedSitesPage = lazy(() => import('./pages/SupportedSitesPage'));
 const ReferralPage = lazy(() => import('./pages/ReferralPage'));
 
@@ -159,6 +161,11 @@ function App() {
             <ReferralPage />
           </Suspense>
         } />
+        <Route path="analytics" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <UserAnalyticsPage />
+          </Suspense>
+        } />
       </Route>
 
       {/* Admin Routes */}
@@ -204,6 +211,11 @@ function App() {
         <Route path="result" element={
           <Suspense fallback={<LoadingFallback />}>
             <PaymentResultPage />
+          </Suspense>
+        } />
+        <Route path="history" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <PaymentHistoryPage />
           </Suspense>
         } />
       </Route>

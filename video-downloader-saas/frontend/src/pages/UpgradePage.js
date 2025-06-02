@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContextV2';
+import { useAuth } from '../context/AuthContext';
 import TierBadge from '../components/ui/TierBadge';
-import axios from 'axios';
+import PaymentMethodSelector from '../components/payment/PaymentMethodSelector';
 
 const UpgradePage = () => {
   const { user, getUserTier, isAuthenticated, createPayment, trackPageView, isSubscriptionExpired } = useAuth();
@@ -54,37 +54,18 @@ const UpgradePage = () => {
     { icon: '🔧', title: 'API Access', description: 'Truy cập API cho developers' }
   ];
 
-  const handlePayment = async (method) => {
-    if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập để nâng cấp');
-      window.location.href = '/login';
-      return;
-    }
+  const handlePaymentSuccess = () => {
+    // Redirect to success page or refresh user data
+    window.location.href = '/payment/success';
+  };
 
-    setLoading(true);
-    
-    try {
-      const plan = plans[selectedPlan];
-      const endpoint = method === 'vnpay' ? '/api/payments/vnpay/create' : '/api/payments/momo/create';
-      
-      const response = await axios.post(endpoint, {
-        amount: plan.price,
-        months: plan.duration,
-        orderInfo: `Nang cap Pro ${plan.duration} thang`
-      });
+  const handlePaymentError = (error) => {
+    alert(error || 'Có lỗi xảy ra khi thanh toán');
+  };
 
-      if (response.data.success) {
-        const paymentUrl = response.data.data.payUrl || response.data.data.paymentUrl;
-        window.location.href = paymentUrl;
-      } else {
-        alert('Có lỗi xảy ra khi tạo thanh toán');
-      }
-    } catch (error) {
-      console.error('Payment error:', error);
-      alert('Có lỗi xảy ra khi tạo thanh toán');
-    } finally {
-      setLoading(false);
-    }
+  const handlePaymentCancel = () => {
+    // User cancelled payment, stay on current page
+    console.log('Payment cancelled by user');
   };
 
   const formatPrice = (price) => {
@@ -243,48 +224,13 @@ const UpgradePage = () => {
 
         {/* Payment Methods */}
         <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-            Chọn phương thức thanh toán
-          </h2>
-          
-          <div className="grid md:grid-cols-2 gap-6">
-            <button
-              onClick={() => handlePayment('vnpay')}
-              disabled={loading}
-              className="flex items-center justify-center p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 disabled:opacity-50"
-            >
-              <div className="text-center">
-                <div className="text-4xl mb-2">🏦</div>
-                <h3 className="font-semibold text-gray-900 mb-1">VNPay</h3>
-                <p className="text-sm text-gray-600">
-                  Thanh toán qua ngân hàng
-                </p>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => handlePayment('momo')}
-              disabled={loading}
-              className="flex items-center justify-center p-6 border-2 border-gray-200 rounded-lg hover:border-pink-500 hover:bg-pink-50 transition-all duration-200 disabled:opacity-50"
-            >
-              <div className="text-center">
-                <div className="text-4xl mb-2">📱</div>
-                <h3 className="font-semibold text-gray-900 mb-1">MoMo</h3>
-                <p className="text-sm text-gray-600">
-                  Thanh toán qua ví điện tử
-                </p>
-              </div>
-            </button>
-          </div>
-          
-          {loading && (
-            <div className="text-center mt-6">
-              <div className="inline-flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
-                Đang tạo thanh toán...
-              </div>
-            </div>
-          )}
+          <PaymentMethodSelector
+            amount={plans[selectedPlan].price}
+            months={plans[selectedPlan].duration}
+            onSuccess={handlePaymentSuccess}
+            onError={handlePaymentError}
+            onCancel={handlePaymentCancel}
+          />
         </div>
       </div>
     </div>

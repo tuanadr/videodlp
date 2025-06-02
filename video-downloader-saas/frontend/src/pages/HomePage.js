@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
-import { useAuth } from '../context/AuthContextV2';
+import { useAuth } from '../context/AuthContext';
 import SEO from '../components/seo/SEO';
 import BannerAd from '../components/ads/BannerAd';
 import TierBadge from '../components/ui/TierBadge';
