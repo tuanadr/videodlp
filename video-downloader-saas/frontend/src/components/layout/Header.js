@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Bars3Icon, 
+import {
+  Bars3Icon,
   XMarkIcon,
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import useAppStore from '../../store/useAppStore';
 import Button from '../ui/Button';
+import ThemeToggle from '../ui/ThemeToggle';
 import UserMenu from './UserMenu';
 import MobileMenu from './MobileMenu';
 
@@ -52,7 +53,7 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+    <header className="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -61,7 +62,7 @@ const Header = () => {
               <div className="h-8 w-8 bg-gradient-to-r from-primary-600 to-blue-600 rounded-lg flex items-center justify-center">
                 <CloudArrowDownIcon className="h-5 w-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-gray-900">
+              <span className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 TaiVideoNhanh
               </span>
             </Link>
@@ -75,8 +76,8 @@ const Header = () => {
                 to={item.href}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   item.current
-                    ? 'text-primary-600 bg-primary-50'
-                    : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                    ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/20 dark:text-primary-400'
+                    : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 {item.name}
@@ -84,16 +85,18 @@ const Header = () => {
             ))}
           </nav>
 
-          {/* Desktop Auth */}
+          {/* Desktop Auth & Theme Toggle */}
           <div className="hidden md:flex items-center space-x-4">
+            <ThemeToggle />
             <UserMenu />
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center space-x-2">
+            <ThemeToggle size="sm" />
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-gray-700 hover:text-gray-900 focus:outline-none"
+              className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none"
             >
               {isMobileMenuOpen ? (
                 <XMarkIcon className="h-6 w-6" />

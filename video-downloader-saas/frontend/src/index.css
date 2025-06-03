@@ -35,14 +35,14 @@
   html {
     font-size: 100%;
   }
-  
+
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
     line-height: 1.6;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold;
+    @apply font-semibold text-gray-900 dark:text-gray-100;
   }
 
   h1 {
@@ -66,7 +66,7 @@
   
   /* Cải thiện focus styles */
   :focus {
-    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-gray-900;
   }
   
   /* Đảm bảo các phần tử tương tác có kích thước đủ lớn */
@@ -93,18 +93,18 @@
   }
 
   .card {
-    @apply bg-white rounded-lg shadow-card p-6;
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-card p-6 border border-gray-200 dark:border-gray-700;
   }
 
   .form-input {
-    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm;
+    @apply block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm;
   }
 
   .form-label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
   }
 
   .form-error {
-    @apply mt-1 text-sm text-red-600;
+    @apply mt-1 text-sm text-red-600 dark:text-red-400;
   }
 }

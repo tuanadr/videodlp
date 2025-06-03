@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import useAppStore from './store/useAppStore';
 
 // Components
@@ -12,23 +13,23 @@ import NotificationContainer from './components/ui/NotificationContainer';
 import Layout from './components/layout/Layout';
 import LoadingSpinner from './components/ui/LoadingSpinner';
 
-// Pages
-import HomePage from './pages/HomePage';
-import DownloadPage from './pages/DownloadPage';
-import PricingPage from './pages/PricingPage';
-import ProfilePage from './pages/ProfilePage';
-import SettingsPage from './pages/SettingsPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import SupportedSitesPage from './pages/SupportedSitesPage';
-import DashboardPage from './pages/DashboardPage';
+// Lazy-loaded Pages for code splitting
+const HomePage = React.lazy(() => import('./pages/HomePage'));
+const DownloadPage = React.lazy(() => import('./pages/DownloadPage'));
+const PricingPage = React.lazy(() => import('./pages/PricingPage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage'));
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const RegisterPage = React.lazy(() => import('./pages/RegisterPage'));
+const SupportedSitesPage = React.lazy(() => import('./pages/SupportedSitesPage'));
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 
-// Downloader Pages
-import YouTubeDownloaderPage from './pages/downloaders/YouTubeDownloaderPage';
-import FacebookDownloaderPage from './pages/downloaders/FacebookDownloaderPage';
-import TikTokDownloaderPage from './pages/downloaders/TikTokDownloaderPage';
-import InstagramDownloaderPage from './pages/downloaders/InstagramDownloaderPage';
-import SoundCloudDownloaderPage from './pages/downloaders/SoundCloudDownloaderPage';
+// Lazy-loaded Downloader Pages
+const YouTubeDownloaderPage = React.lazy(() => import('./pages/downloaders/YouTubeDownloaderPage'));
+const FacebookDownloaderPage = React.lazy(() => import('./pages/downloaders/FacebookDownloaderPage'));
+const TikTokDownloaderPage = React.lazy(() => import('./pages/downloaders/TikTokDownloaderPage'));
+const InstagramDownloaderPage = React.lazy(() => import('./pages/downloaders/InstagramDownloaderPage'));
+const SoundCloudDownloaderPage = React.lazy(() => import('./pages/downloaders/SoundCloudDownloaderPage'));
 
 // Create QueryClient for React Query
 const queryClient = new QueryClient({
@@ -76,8 +77,9 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ErrorBoundary>
-        <Layout>
+      <ThemeProvider>
+        <ErrorBoundary>
+          <Layout>
           <Suspense fallback={<AppLoadingSpinner />}>
             <Routes>
               {/* Public Routes */}
@@ -136,8 +138,9 @@ function App() {
 
           {/* Global Notifications */}
           <NotificationContainer />
-        </Layout>
-      </ErrorBoundary>
+          </Layout>
+        </ErrorBoundary>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

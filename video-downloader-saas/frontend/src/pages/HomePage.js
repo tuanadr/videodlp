@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import useAppStore from '../store/useAppStore';
-import Button from '../components/ui/Button';
+import Button from '../components/Button';
 import Input from '../components/ui/Input';
 
 const HomePage = () => {
@@ -60,11 +60,11 @@ const HomePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-blue-50 to-indigo-100"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900"></div>
 
         {/* Background pattern */}
         <div className="absolute inset-0 opacity-10">
@@ -76,7 +76,7 @@ const HomePage = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24">
           <div className="text-center">
             {/* Main heading */}
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
               Tải video từ{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-blue-600">
                 1000+ trang web
@@ -84,14 +84,14 @@ const HomePage = () => {
             </h1>
 
             {/* Subtitle */}
-            <p className="mt-6 max-w-3xl mx-auto text-xl md:text-2xl text-gray-600 leading-relaxed">
+            <p className="mt-6 max-w-3xl mx-auto text-xl md:text-2xl text-gray-600 dark:text-gray-300 leading-relaxed">
               Dịch vụ tải video trực tuyến <strong>nhanh chóng</strong>, <strong>dễ dàng</strong> và <strong>an toàn</strong> từ
               YouTube, Facebook, TikTok, Instagram và nhiều nền tảng khác.
             </p>
 
             {/* Quick download form */}
             <div className="mt-10 max-w-2xl mx-auto">
-              <div className="flex flex-col sm:flex-row gap-4 p-2 bg-white rounded-2xl shadow-xl border border-gray-200">
+              <div className="flex flex-col sm:flex-row gap-4 p-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
                 <div className="flex-1">
                   <Input
                     type="url"
@@ -99,21 +99,21 @@ const HomePage = () => {
                     value={videoUrl}
                     onChange={(e) => setVideoUrl(e.target.value)}
                     className="border-0 focus:ring-0 text-lg"
-                    leftIcon={<GlobeAltIcon className="h-5 w-5" />}
+                    leftIcon={GlobeAltIcon}
                   />
                 </div>
                 <Button
                   onClick={handleQuickDownload}
                   size="lg"
                   className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700"
-                  rightIcon={<ArrowRightIcon className="h-5 w-5" />}
+                  rightIcon={ArrowRightIcon}
                 >
                   Tải ngay
                 </Button>
               </div>
 
               {/* Supported platforms */}
-              <div className="mt-6 flex flex-wrap justify-center items-center gap-6 text-sm text-gray-500">
+              <div className="mt-6 flex flex-wrap justify-center items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
                 <span className="font-medium">Hỗ trợ:</span>
                 <span className="flex items-center gap-1">
                   <PlayIcon className="h-4 w-4 text-red-500" />
@@ -142,7 +142,7 @@ const HomePage = () => {
                   onClick={handleGetStarted}
                   size="xl"
                   className="px-10 py-4 text-lg font-semibold bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 shadow-lg"
-                  rightIcon={<ArrowRightIcon className="h-5 w-5" />}
+                  rightIcon={ArrowRightIcon}
                 >
                   Bắt đầu miễn phí
                 </Button>
@@ -150,7 +150,7 @@ const HomePage = () => {
                   onClick={handleLogin}
                   variant="secondary"
                   size="xl"
-                  className="px-10 py-4 text-lg font-semibold border-2 border-gray-300 hover:border-primary-300"
+                  className="px-10 py-4 text-lg font-semibold border-2 border-gray-300 hover:border-primary-300 text-gray-900 dark:text-gray-100"
                 >
                   Đăng nhập
                 </Button>
@@ -171,7 +171,7 @@ const HomePage = () => {
                     onClick={() => navigate('/download')}
                     size="xl"
                     className="px-10 py-4 text-lg font-semibold bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 shadow-lg"
-                    rightIcon={<ArrowRightIcon className="h-5 w-5" />}
+                    rightIcon={ArrowRightIcon}
                   >
                     Vào trang tải video
                   </Button>
@@ -183,13 +183,13 @@ const HomePage = () => {
       </div>
 
       {/* Features Section */}
-      <div className="py-24 bg-white">
+      <div className="py-24 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100">
               Tại sao chọn chúng tôi?
             </h2>
-            <p className="mt-4 text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="mt-4 text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
               Trải nghiệm tải video tốt nhất với công nghệ tiên tiến và giao diện thân thiện
             </p>
           </div>
@@ -200,10 +200,10 @@ const HomePage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-primary-500 to-blue-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <BoltIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900">
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Tốc độ siêu nhanh
               </h3>
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
                 Tải video với tốc độ cao nhất, không giới hạn băng thông
               </p>
             </div>
@@ -213,10 +213,10 @@ const HomePage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <ShieldCheckIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900">
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 An toàn & Bảo mật
               </h3>
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
                 Không lưu trữ dữ liệu cá nhân, bảo vệ quyền riêng tư tuyệt đối
               </p>
             </div>
@@ -226,10 +226,10 @@ const HomePage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <CloudArrowDownIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900">
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Không giới hạn tải
               </h3>
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
                 Tải không giới hạn video từ mọi nền tảng, mọi lúc mọi nơi
               </p>
             </div>
@@ -239,10 +239,10 @@ const HomePage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <DevicePhoneMobileIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900">
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Đa nền tảng
               </h3>
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
                 Hoạt động trên mọi thiết bị: máy tính, điện thoại, tablet
               </p>
             </div>
@@ -252,10 +252,10 @@ const HomePage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-indigo-500 to-blue-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <StarIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900">
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Chất lượng cao
               </h3>
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
                 Hỗ trợ tải video chất lượng từ 360p đến 4K Ultra HD
               </p>
             </div>
@@ -265,10 +265,10 @@ const HomePage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <GlobeAltIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900">
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 1000+ trang web
               </h3>
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
                 Hỗ trợ tải từ hơn 1000 trang web và nền tảng video
               </p>
             </div>
@@ -277,47 +277,47 @@ const HomePage = () => {
       </div>
 
       {/* Pricing Section */}
-      <div className="py-24 bg-gray-50">
+      <div className="py-24 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100">
               Chọn gói phù hợp với bạn
             </h2>
-            <p className="mt-4 text-xl text-gray-600">
+            <p className="mt-4 text-xl text-gray-600 dark:text-gray-300">
               Tất cả gói đều có tải không giới hạn, chỉ khác biệt về chất lượng và quảng cáo
             </p>
           </div>
 
           <div className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Free Plan */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 relative">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 relative">
               <div className="text-center">
-                <h3 className="text-2xl font-bold text-gray-900">Free</h3>
-                <p className="mt-2 text-gray-600">Miễn phí mãi mãi</p>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Free</h3>
+                <p className="mt-2 text-gray-600 dark:text-gray-300">Miễn phí mãi mãi</p>
                 <div className="mt-6">
-                  <span className="text-4xl font-bold text-gray-900">0₫</span>
-                  <span className="text-gray-600">/tháng</span>
+                  <span className="text-4xl font-bold text-gray-900 dark:text-gray-100">0₫</span>
+                  <span className="text-gray-600 dark:text-gray-300">/tháng</span>
                 </div>
               </div>
 
               <ul className="mt-8 space-y-4">
                 <li className="flex items-center">
                   <CheckIcon className="h-5 w-5 text-green-500 mr-3" />
-                  <span>Tải không giới hạn video</span>
+                  <span className="text-gray-900 dark:text-gray-100">Tải không giới hạn video</span>
                 </li>
                 <li className="flex items-center">
                   <CheckIcon className="h-5 w-5 text-green-500 mr-3" />
-                  <span>Chất lượng tối đa 1080p</span>
+                  <span className="text-gray-900 dark:text-gray-100">Chất lượng tối đa 1080p</span>
                 </li>
                 <li className="flex items-center">
                   <CheckIcon className="h-5 w-5 text-green-500 mr-3" />
-                  <span>Hỗ trợ 1000+ trang web</span>
+                  <span className="text-gray-900 dark:text-gray-100">Hỗ trợ 1000+ trang web</span>
                 </li>
                 <li className="flex items-center">
-                  <div className="h-5 w-5 bg-yellow-100 rounded mr-3 flex items-center justify-center">
+                  <div className="h-5 w-5 bg-yellow-100 dark:bg-yellow-800 rounded mr-3 flex items-center justify-center">
                     <div className="h-2 w-2 bg-yellow-500 rounded"></div>
                   </div>
-                  <span className="text-gray-600">Có quảng cáo</span>
+                  <span className="text-gray-600 dark:text-gray-300">Có quảng cáo</span>
                 </li>
               </ul>
 
@@ -326,7 +326,7 @@ const HomePage = () => {
                   onClick={handleGetStarted}
                   variant="secondary"
                   size="lg"
-                  className="w-full"
+                  className="w-full text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   {isAuthenticated ? 'Đang sử dụng' : 'Bắt đầu miễn phí'}
                 </Button>
@@ -378,7 +378,7 @@ const HomePage = () => {
                   onClick={() => navigate('/pricing')}
                   variant="secondary"
                   size="lg"
-                  className="w-full bg-white text-primary-600 hover:bg-gray-50"
+                  className="w-full bg-white text-primary-600 hover:bg-gray-50 border-white hover:border-gray-200"
                 >
                   Nâng cấp Pro
                 </Button>
@@ -401,8 +401,8 @@ const HomePage = () => {
             <Button
               onClick={handleGetStarted}
               size="xl"
-              className="px-10 py-4 text-lg font-semibold bg-white text-primary-600 hover:bg-gray-50 shadow-lg"
-              rightIcon={<ArrowRightIcon className="h-5 w-5" />}
+              className="px-10 py-4 text-lg font-semibold bg-white text-primary-600 hover:bg-gray-50 shadow-lg border-2 border-white hover:border-gray-200"
+              rightIcon={ArrowRightIcon}
             >
               {isAuthenticated ? 'Bắt đầu tải video' : 'Đăng ký miễn phí'}
             </Button>

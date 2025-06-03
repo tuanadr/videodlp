@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { memo } from 'react';
+import { cn } from '../../utils/cn';
 
-const LoadingSpinner = ({ 
-  size = 'md', 
-  color = 'primary', 
+const LoadingSpinner = memo(({
+  size = 'md',
+  color = 'primary',
   className = '',
   text = null,
-  fullScreen = false 
+  fullScreen = false
 }) => {
   const sizeClasses = {
+    xs: 'h-3 w-3',
     sm: 'h-4 w-4',
     md: 'h-8 w-8',
     lg: 'h-12 w-12',
@@ -15,17 +17,17 @@ const LoadingSpinner = ({
   };
 
   const colorClasses = {
-    primary: 'text-primary-600',
+    primary: 'text-primary-600 dark:text-primary-400',
     white: 'text-white',
-    gray: 'text-gray-600',
-    blue: 'text-blue-600',
-    green: 'text-green-600',
-    red: 'text-red-600',
+    gray: 'text-gray-600 dark:text-gray-400',
+    blue: 'text-blue-600 dark:text-blue-400',
+    green: 'text-green-600 dark:text-green-400',
+    red: 'text-red-600 dark:text-red-400',
   };
 
   const spinner = (
-    <div className={`animate-spin ${sizeClasses[size]} ${colorClasses[color]} ${className}`}>
-      <svg className="w-full h-full" fill="none" viewBox="0 0 24 24">
+    <div className={cn("animate-spin", sizeClasses[size], colorClasses[color], className)}>
+      <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <circle
           className="opacity-25"
           cx="12"
@@ -45,11 +47,11 @@ const LoadingSpinner = ({
 
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-white dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-50">
         <div className="text-center">
           {spinner}
           {text && (
-            <p className="mt-4 text-sm text-gray-600">{text}</p>
+            <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">{text}</p>
           )}
         </div>
       </div>
@@ -60,12 +62,12 @@ const LoadingSpinner = ({
     return (
       <div className="flex items-center space-x-3">
         {spinner}
-        <span className="text-sm text-gray-600">{text}</span>
+        <span className="text-sm text-gray-600 dark:text-gray-400">{text}</span>
       </div>
     );
   }
 
   return spinner;
-};
+});
 
 export default LoadingSpinner;

@@ -56,13 +56,15 @@ RUN echo "OK" > /usr/share/nginx/html/health.txt && \
 
 # Set proper permissions
 RUN chown -R nginx-app:nginx-app /usr/share/nginx/html && \
-    chown -R nginx-app:nginx-app /etc/nginx/conf.d && \
-    chmod -R 644 /usr/share/nginx/html && \
-    chmod -R 644 /etc/nginx/conf.d
+    chown -R nginx-app:nginx-app /etc/nginx && \
+    chmod -R 755 /usr/share/nginx/html && \
+    chmod -R 644 /etc/nginx/conf.d && \
+    chmod 644 /etc/nginx/nginx.conf
 
 # Create directories for nginx
-RUN mkdir -p /var/cache/nginx /var/log/nginx && \
-    chown -R nginx-app:nginx-app /var/cache/nginx /var/log/nginx
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run && \
+    chown -R nginx-app:nginx-app /var/cache/nginx /var/log/nginx /var/run && \
+    chmod -R 755 /var/cache/nginx /var/log/nginx /var/run
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
@@ -71,8 +73,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 # Expose port
 EXPOSE 80
 
-# Switch to non-root user
-USER nginx-app
+# Keep root user for nginx to work properly
+# USER nginx-app
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]

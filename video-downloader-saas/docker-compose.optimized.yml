@@ -137,7 +137,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.simple
+      dockerfile: Dockerfile.optimized
       args:
         - NODE_ENV=production
     
@@ -224,7 +224,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.simple
+      dockerfile: Dockerfile.optimized
       args:
         - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000}
     
@@ -319,38 +319,18 @@ networks:
 volumes:
   postgres_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/postgres
-  
+
   redis_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/redis
-  
+
   backend_downloads:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/downloads
-  
+
   backend_logs:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/logs
-  
+
   backend_temp:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/temp
 
 # =============================================================================
 # SECRETS

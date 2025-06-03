@@ -1,18 +1,30 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import axios from 'axios';
 
 const BannerAd = ({ position = 'header', className = '' }) => {
   const { getUserTier } = useAuth();
   const adRef = useRef(null);
   const impressionTracked = useRef(false);
-  
+
   const tier = getUserTier();
-  
-  // Don't show ads for Pro users
-  if (tier === 'pro') {
-    return null;
-  }
+
+  const trackAdImpression = useCallback(async () => {
+    try {
+      // Temporarily disable analytics to prevent errors
+      console.log('Ad impression tracked:', {
+        adType: 'banner',
+        adPosition: position,
+        adId: `banner_${position}_${Date.now()}`
+      });
+      // await axios.post('/api/analytics/track/ad-impression', {
+      //   adType: 'banner',
+      //   adPosition: position,
+      //   adId: `banner_${position}_${Date.now()}`
+      // });
+    } catch (error) {
+      console.error('Failed to track ad impression:', error);
+    }
+  }, [position]);
 
   // Track ad impression
   useEffect(() => {
@@ -29,33 +41,21 @@ const BannerAd = ({ position = 'header', className = '' }) => {
         { threshold: 0.5 }
       );
 
-      observer.observe(adRef.current);
-      
+      const currentRef = adRef.current;
+      observer.observe(currentRef);
+
       return () => {
-        if (adRef.current) {
-          observer.unobserve(adRef.current);
+        if (currentRef) {
+          observer.unobserve(currentRef);
         }
       };
     }
-  }, []);
+  }, [trackAdImpression]);
 
-  const trackAdImpression = async () => {
-    try {
-      // Temporarily disable analytics to prevent errors
-      console.log('Ad impression tracked:', {
-        adType: 'banner',
-        adPosition: position,
-        adId: `banner_${position}_${Date.now()}`
-      });
-      // await axios.post('/api/analytics/track/ad-impression', {
-      //   adType: 'banner',
-      //   adPosition: position,
-      //   adId: `banner_${position}_${Date.now()}`
-      // });
-    } catch (error) {
-      console.error('Failed to track ad impression:', error);
-    }
-  };
+  // Don't show ads for Pro users
+  if (tier === 'pro') {
+    return null;
+  }
 
   const trackAdClick = async () => {
     try {

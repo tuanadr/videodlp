@@ -12,7 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import useAppStore from '../store/useAppStore';
-import Button from '../components/ui/Button';
+import Button from '../components/Button';
 
 const PricingPage = () => {
   const { isAuthenticated, user } = useAuth();
@@ -98,15 +98,15 @@ const PricingPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               Chọn gói phù hợp với bạn
             </h1>
-            <p className="mt-2 text-lg text-gray-600">
+            <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
               Tất cả gói đều có tải không giới hạn, chỉ khác biệt về chất lượng và trải nghiệm
             </p>
           </div>
@@ -116,14 +116,14 @@ const PricingPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Billing cycle toggle */}
         <div className="flex justify-center mb-12">
-          <div className="bg-white rounded-lg p-1 shadow-sm border">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="grid grid-cols-2 gap-1">
               <button
                 onClick={() => setBillingCycle('monthly')}
                 className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
                   billingCycle === 'monthly'
                     ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 hover:text-gray-900'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 Hàng tháng
@@ -133,7 +133,7 @@ const PricingPage = () => {
                 className={`px-6 py-2 rounded-md text-sm font-medium transition-colors relative ${
                   billingCycle === 'yearly'
                     ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 hover:text-gray-900'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 Hàng năm
@@ -150,10 +150,10 @@ const PricingPage = () => {
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`bg-white rounded-2xl shadow-lg border-2 p-8 relative ${
+              className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg border-2 p-8 relative ${
                 plan.popular
-                  ? 'border-primary-500 ring-2 ring-primary-200'
-                  : 'border-gray-200'
+                  ? 'border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800'
+                  : 'border-gray-200 dark:border-gray-700'
               }`}
             >
               {plan.popular && (
@@ -166,23 +166,23 @@ const PricingPage = () => {
               )}
 
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
-                <p className="text-gray-600 mt-2">{plan.description}</p>
-                
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{plan.name}</h3>
+                <p className="text-gray-600 dark:text-gray-300 mt-2">{plan.description}</p>
+
                 <div className="mt-6">
                   <div className="flex items-baseline justify-center">
-                    <span className="text-4xl font-bold text-gray-900">
+                    <span className="text-4xl font-bold text-gray-900 dark:text-gray-100">
                       {plan.price[billingCycle].toLocaleString('vi-VN')}₫
                     </span>
                     {plan.price[billingCycle] > 0 && (
-                      <span className="text-gray-600 ml-1">
+                      <span className="text-gray-600 dark:text-gray-300 ml-1">
                         /{billingCycle === 'monthly' ? 'tháng' : 'năm'}
                       </span>
                     )}
                   </div>
-                  
+
                   {billingCycle === 'yearly' && plan.price.yearly > 0 && (
-                    <p className="text-sm text-green-600 mt-2">
+                    <p className="text-sm text-green-600 dark:text-green-400 mt-2">
                       Tiết kiệm {((plan.price.monthly * 12 - plan.price.yearly) / 1000).toFixed(0)}k₫/năm
                     </p>
                   )}
@@ -201,11 +201,11 @@ const PricingPage = () => {
                       <XMarkIcon className="h-5 w-5 text-gray-300 mt-0.5 mr-3 flex-shrink-0" />
                     )}
                     <span className={`text-sm ${
-                      feature.included 
-                        ? 'text-gray-900' 
-                        : feature.isWarning 
-                        ? 'text-yellow-700'
-                        : 'text-gray-400'
+                      feature.included
+                        ? 'text-gray-900 dark:text-gray-100'
+                        : feature.isWarning
+                        ? 'text-yellow-700 dark:text-yellow-400'
+                        : 'text-gray-400 dark:text-gray-500'
                     }`}>
                       {feature.text}
                     </span>
@@ -228,8 +228,7 @@ const PricingPage = () => {
                 }
                 rightIcon={
                   !((plan.id === 'free' && user?.tier === 'free') ||
-                    (plan.id === 'pro' && user?.tier === 'pro')) && 
-                  <ArrowRightIcon className="h-5 w-5" />
+                    (plan.id === 'pro' && user?.tier === 'pro')) ? ArrowRightIcon : null
                 }
               >
                 {plan.buttonText}
@@ -241,10 +240,10 @@ const PricingPage = () => {
         {/* Features comparison */}
         <div className="mt-20">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               Tại sao chọn chúng tôi?
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
+            <p className="mt-4 text-lg text-gray-600 dark:text-gray-300">
               Trải nghiệm tải video tốt nhất với công nghệ tiên tiến
             </p>
           </div>
@@ -254,10 +253,10 @@ const PricingPage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center mb-6">
                 <BoltIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 Tốc độ siêu nhanh
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 Tải video với tốc độ cao nhất, không giới hạn băng thông
               </p>
             </div>
@@ -266,10 +265,10 @@ const PricingPage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mb-6">
                 <ShieldCheckIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 An toàn & Bảo mật
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 Không lưu trữ dữ liệu cá nhân, bảo vệ quyền riêng tư tuyệt đối
               </p>
             </div>
@@ -278,10 +277,10 @@ const PricingPage = () => {
               <div className="mx-auto h-16 w-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mb-6">
                 <CloudArrowDownIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 Không giới hạn tải
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 Tải không giới hạn video từ mọi nền tảng, mọi lúc mọi nơi
               </p>
             </div>
@@ -291,7 +290,7 @@ const PricingPage = () => {
         {/* FAQ Section */}
         <div className="mt-20">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               Câu hỏi thường gặp
             </h2>
           </div>
@@ -315,14 +314,14 @@ const PricingPage = () => {
                 answer: 'Hoàn toàn. Chúng tôi không lưu trữ video hay dữ liệu cá nhân của bạn. Mọi quá trình tải xuống đều được thực hiện trực tiếp.'
               }
             ].map((faq, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-sm border p-6">
+              <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-start">
-                  <QuestionMarkCircleIcon className="h-6 w-6 text-primary-600 mt-0.5 mr-3 flex-shrink-0" />
+                  <QuestionMarkCircleIcon className="h-6 w-6 text-primary-600 dark:text-primary-400 mt-0.5 mr-3 flex-shrink-0" />
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                       {faq.question}
                     </h3>
-                    <p className="text-gray-600">
+                    <p className="text-gray-600 dark:text-gray-300">
                       {faq.answer}
                     </p>
                   </div>
@@ -344,8 +343,8 @@ const PricingPage = () => {
             <Button
               onClick={handleGetStarted}
               size="xl"
-              className="bg-white text-primary-600 hover:bg-gray-50"
-              rightIcon={<ArrowRightIcon className="h-5 w-5" />}
+              className="bg-white text-primary-600 hover:bg-gray-50 border-2 border-white hover:border-gray-200 font-semibold"
+              rightIcon={ArrowRightIcon}
             >
               {isAuthenticated ? 'Bắt đầu tải video' : 'Đăng ký miễn phí'}
             </Button>
