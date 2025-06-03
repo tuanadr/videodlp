@@ -58,7 +58,11 @@ const Input = ({
       <div className="relative">
         {LeftIcon && (
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <LeftIcon className={cn(iconSize, "text-gray-400 dark:text-gray-500")} />
+            {typeof LeftIcon === 'function' ? (
+              <LeftIcon className={cn(iconSize, "text-gray-400 dark:text-gray-500")} />
+            ) : (
+              LeftIcon
+            )}
           </div>
         )}
 
@@ -76,8 +80,12 @@ const Input = ({
         />
 
         {RightIcon && (
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <RightIcon className={cn(iconSize, "text-gray-400 dark:text-gray-500")} />
+          <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+            {typeof RightIcon === 'function' ? (
+              <RightIcon className={cn(iconSize, "text-gray-400 dark:text-gray-500")} />
+            ) : (
+              RightIcon
+            )}
           </div>
         )}
       </div>

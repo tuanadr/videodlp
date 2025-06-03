@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { EyeIcon, EyeSlashIcon, EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
+import { EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import Modal, { ModalBody, ModalFooter } from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import PasswordToggleButton from '../ui/PasswordToggleButton';
 import { useAuth } from '../../context/AuthContext';
 import useAppStore from '../../store/useAppStore';
-import { authService } from '../../services/authService';
 
 const LoginModal = () => {
   const { login } = useAuth();
@@ -56,11 +56,9 @@ const LoginModal = () => {
 
     setLoading(true);
     try {
-      const response = await authService.login(formData);
-      
-      // Update auth context
-      login(response.user, response.token);
-      
+      // Use AuthContext login which handles the API call internally
+      const response = await login(formData);
+
       // Close modal and show success message
       closeModal();
       addNotification({
@@ -127,7 +125,7 @@ const LoginModal = () => {
             value={formData.email}
             onChange={handleInputChange}
             error={errors.email}
-            leftIcon={<EnvelopeIcon className="h-5 w-5" />}
+            leftIcon={EnvelopeIcon}
             placeholder="Nhập email của bạn"
             required
             autoComplete="email"
@@ -141,19 +139,12 @@ const LoginModal = () => {
             value={formData.password}
             onChange={handleInputChange}
             error={errors.password}
-            leftIcon={<LockClosedIcon className="h-5 w-5" />}
+            leftIcon={LockClosedIcon}
             rightIcon={
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5" />
-                ) : (
-                  <EyeIcon className="h-5 w-5" />
-                )}
-              </button>
+              <PasswordToggleButton
+                showPassword={showPassword}
+                onToggle={() => setShowPassword(!showPassword)}
+              />
             }
             placeholder="Nhập mật khẩu"
             required

@@ -101,6 +101,14 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
       } catch (error) {
         console.error('Lỗi xác thực:', error);
+
+        // Nếu là lỗi network (không thể kết nối backend), không xóa tokens
+        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || !error.response) {
+          console.warn('Không thể kết nối đến server. Ứng dụng sẽ hoạt động ở chế độ offline.');
+          setLoading(false);
+          return;
+        }
+
         // Không xóa refresh token ở đây, để interceptor có thể thử refresh
         if (error.response?.status === 401 && error.response?.data?.isExpired !== true) {
           // Chỉ xóa tokens nếu lỗi không phải do token hết hạn

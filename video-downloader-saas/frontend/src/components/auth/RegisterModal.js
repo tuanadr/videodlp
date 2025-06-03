@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  EyeIcon, 
-  EyeSlashIcon, 
-  EnvelopeIcon, 
-  LockClosedIcon, 
+import {
+  EnvelopeIcon,
+  LockClosedIcon,
   UserIcon,
   CheckIcon,
   XMarkIcon
@@ -11,12 +9,12 @@ import {
 import Modal, { ModalBody, ModalFooter } from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import PasswordToggleButton from '../ui/PasswordToggleButton';
 import { useAuth } from '../../context/AuthContext';
 import useAppStore from '../../store/useAppStore';
-import { authService } from '../../services/authService';
 
 const RegisterModal = () => {
-  const { login } = useAuth();
+  const { register } = useAuth();
   const { ui, closeModal, openModal, addNotification } = useAppStore();
   const [formData, setFormData] = useState({
     name: '',
@@ -110,15 +108,13 @@ const RegisterModal = () => {
 
     setLoading(true);
     try {
-      const response = await authService.register({
+      // Use AuthContext register which handles the API call internally
+      const response = await register({
         name: formData.name.trim(),
         email: formData.email,
         password: formData.password,
       });
-      
-      // Update auth context
-      login(response.user, response.token);
-      
+
       // Close modal and show success message
       closeModal();
       addNotification({
@@ -222,7 +218,7 @@ const RegisterModal = () => {
             value={formData.name}
             onChange={handleInputChange}
             error={errors.name}
-            leftIcon={<UserIcon className="h-5 w-5" />}
+            leftIcon={UserIcon}
             placeholder="Nhập họ và tên"
             required
             autoComplete="name"
@@ -236,7 +232,7 @@ const RegisterModal = () => {
             value={formData.email}
             onChange={handleInputChange}
             error={errors.email}
-            leftIcon={<EnvelopeIcon className="h-5 w-5" />}
+            leftIcon={EnvelopeIcon}
             placeholder="Nhập email của bạn"
             required
             autoComplete="email"
@@ -251,19 +247,12 @@ const RegisterModal = () => {
               value={formData.password}
               onChange={handleInputChange}
               error={errors.password}
-              leftIcon={<LockClosedIcon className="h-5 w-5" />}
+              leftIcon={LockClosedIcon}
               rightIcon={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5" />
-                  )}
-                </button>
+                <PasswordToggleButton
+                  showPassword={showPassword}
+                  onToggle={() => setShowPassword(!showPassword)}
+                />
               }
               placeholder="Tạo mật khẩu mạnh"
               required
@@ -280,19 +269,12 @@ const RegisterModal = () => {
             value={formData.confirmPassword}
             onChange={handleInputChange}
             error={errors.confirmPassword}
-            leftIcon={<LockClosedIcon className="h-5 w-5" />}
+            leftIcon={LockClosedIcon}
             rightIcon={
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                {showConfirmPassword ? (
-                  <EyeSlashIcon className="h-5 w-5" />
-                ) : (
-                  <EyeIcon className="h-5 w-5" />
-                )}
-              </button>
+              <PasswordToggleButton
+                showPassword={showConfirmPassword}
+                onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
+              />
             }
             placeholder="Nhập lại mật khẩu"
             required

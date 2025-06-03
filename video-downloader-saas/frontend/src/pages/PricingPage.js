@@ -12,7 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import useAppStore from '../store/useAppStore';
-import Button from '../components/Button';
+import Button from '../components/ui/Button';
 
 const PricingPage = () => {
   const { isAuthenticated, user } = useAuth();

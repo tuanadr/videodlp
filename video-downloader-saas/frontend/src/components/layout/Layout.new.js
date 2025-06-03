@@ -14,16 +14,16 @@ const Layout = ({ children, showFooter = true, className = '' }) => {
     <>
       {/* SEO Head component for meta tags */}
       <SEOHead />
-
+      
       <div className={`min-h-screen flex flex-col bg-white dark:bg-gray-900 ${className}`}>
         {/* Header */}
         <Header />
-
+        
         {/* Main Content */}
         <main className="flex-1 relative">
           {children}
         </main>
-
+        
         {/* Footer */}
         {shouldShowFooter && <Footer />}
       </div>

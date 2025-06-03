@@ -1,5 +1,4 @@
 import axios from 'axios';
-import useAppStore from '../store/useAppStore';
 
 // Base API configuration
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -26,9 +25,6 @@ api.interceptors.request.use(
     // Add request timestamp for logging
     config.metadata = { startTime: new Date() };
 
-    // Set loading state
-    useAppStore.getState().setUI({ loading: true });
-
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
       data: config.data,
       params: config.params,
@@ -38,7 +34,6 @@ api.interceptors.request.use(
   },
   (error) => {
     console.error('❌ Request Error:', error);
-    useAppStore.getState().setUI({ loading: false });
     return Promise.reject(error);
   }
 );
@@ -48,15 +43,12 @@ api.interceptors.response.use(
   (response) => {
     // Calculate request duration
     const duration = new Date() - response.config.metadata.startTime;
-    
+
     console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
       status: response.status,
       duration: `${duration}ms`,
       data: response.data,
     });
-
-    // Clear loading state
-    useAppStore.getState().setUI({ loading: false });
 
     return response;
   },
@@ -73,54 +65,11 @@ api.interceptors.response.use(
       data: error.response?.data,
     });
 
-    // Clear loading state
-    useAppStore.getState().setUI({ loading: false });
-
     // Handle specific error cases
     if (error.response?.status === 401) {
-      // Unauthorized - clear auth and redirect to login
+      // Unauthorized - clear auth
       localStorage.removeItem('token');
-      useAppStore.getState().openModal('login');
-      useAppStore.getState().addNotification({
-        type: 'error',
-        title: 'Phiên đăng nhập hết hạn',
-        message: 'Vui lòng đăng nhập lại để tiếp tục.',
-      });
-    } else if (error.response?.status === 403) {
-      // Forbidden
-      useAppStore.getState().addNotification({
-        type: 'error',
-        title: 'Không có quyền truy cập',
-        message: 'Bạn không có quyền thực hiện hành động này.',
-      });
-    } else if (error.response?.status === 429) {
-      // Rate limiting
-      useAppStore.getState().addNotification({
-        type: 'warning',
-        title: 'Quá nhiều yêu cầu',
-        message: 'Vui lòng chờ một chút trước khi thử lại.',
-      });
-    } else if (error.response?.status >= 500) {
-      // Server error
-      useAppStore.getState().addNotification({
-        type: 'error',
-        title: 'Lỗi máy chủ',
-        message: 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau.',
-      });
-    } else if (error.code === 'ECONNABORTED') {
-      // Timeout
-      useAppStore.getState().addNotification({
-        type: 'error',
-        title: 'Timeout',
-        message: 'Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại.',
-      });
-    } else if (!error.response) {
-      // Network error
-      useAppStore.getState().addNotification({
-        type: 'error',
-        title: 'Lỗi kết nối',
-        message: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet.',
-      });
+      console.log('Authentication token expired or invalid');
     }
 
     return Promise.reject(error);

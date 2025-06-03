@@ -5,7 +5,7 @@ import useAppStore from '../../store/useAppStore';
 
 const MobileMenu = ({ isOpen, onClose }) => {
   const { user, logout } = useAuth();
-  const { openLoginModal, openRegisterModal } = useAppStore();
+  const { openModal } = useAppStore();
   const location = useLocation();
 
   const navigation = [
@@ -15,12 +15,12 @@ const MobileMenu = ({ isOpen, onClose }) => {
   ];
 
   const handleLogin = () => {
-    openLoginModal();
+    openModal('login');
     onClose();
   };
 
   const handleRegister = () => {
-    openRegisterModal();
+    openModal('register');
     onClose();
   };
 

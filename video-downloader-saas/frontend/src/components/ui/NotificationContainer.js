@@ -13,6 +13,31 @@ const NotificationContainer = () => {
   const { ui, removeNotification } = useAppStore();
   const notifications = ui.notifications || [];
 
+
+
+  if (notifications.length === 0) return null;
+
+  const notificationContent = (
+    <div className="fixed top-4 right-4 z-50 space-y-4 max-w-sm w-full">
+      {notifications.map((notification) => (
+        <NotificationItem
+          key={notification.id}
+          notification={notification}
+          onRemove={removeNotification}
+        />
+      ))}
+    </div>
+  );
+
+  return createPortal(notificationContent, document.body);
+};
+
+const NotificationItem = ({
+  notification,
+  onRemove
+}) => {
+  const { id, type, title, message, duration = 5000 } = notification;
+
   const getIcon = (type) => {
     const iconClass = "h-6 w-6";
     switch (type) {
@@ -69,37 +94,6 @@ const NotificationContainer = () => {
         return 'text-blue-700';
     }
   };
-
-  if (notifications.length === 0) return null;
-
-  const notificationContent = (
-    <div className="fixed top-4 right-4 z-50 space-y-4 max-w-sm w-full">
-      {notifications.map((notification) => (
-        <NotificationItem
-          key={notification.id}
-          notification={notification}
-          onRemove={removeNotification}
-          getIcon={getIcon}
-          getBackgroundColor={getBackgroundColor}
-          getTitleColor={getTitleColor}
-          getMessageColor={getMessageColor}
-        />
-      ))}
-    </div>
-  );
-
-  return createPortal(notificationContent, document.body);
-};
-
-const NotificationItem = ({ 
-  notification, 
-  onRemove, 
-  getIcon, 
-  getBackgroundColor, 
-  getTitleColor, 
-  getMessageColor 
-}) => {
-  const { id, type, title, message, duration = 5000 } = notification;
 
   // Auto remove notification after duration
   useEffect(() => {

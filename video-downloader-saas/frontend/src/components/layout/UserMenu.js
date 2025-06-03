@@ -7,7 +7,7 @@ const UserMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const { user, logout } = useAuth();
-  const { openLoginModal, openRegisterModal } = useAppStore();
+  const { openModal } = useAppStore();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -46,13 +46,13 @@ const UserMenu = () => {
     return (
       <div className="flex items-center space-x-3">
         <button
-          onClick={openLoginModal}
+          onClick={() => openModal('login')}
           className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
         >
           Đăng nhập
         </button>
         <button
-          onClick={openRegisterModal}
+          onClick={() => openModal('register')}
           className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
         >
           Đăng ký
