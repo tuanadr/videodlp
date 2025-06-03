@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Static Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f8ff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 2px solid;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Static Test Page - No Build Process</h1>
+        <p>This is a static HTML file that should always work.</p>
+        
+        <div class="status success">
+            ✅ Static HTML: Working
+        </div>
+        
+        <div class="status success">
+            ✅ CSS Styling: Working
+        </div>
+        
+        <div class="status info">
+            📍 Current time: <span id="time"></span>
+        </div>
+        
+        <div class="status info">
+            🌐 If you see this page, nginx is serving static files correctly
+        </div>
+        
+        <script>
+            document.getElementById('time').textContent = new Date().toLocaleString();
+            console.log('Static test page loaded successfully');
+        </script>
+    </div>
+</body>
+</html>

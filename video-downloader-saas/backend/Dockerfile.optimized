@@ -1,0 +1,186 @@
+# =============================================================================
+# OPTIMIZED MULTI-STAGE DOCKERFILE WITH SECURITY & PERFORMANCE ENHANCEMENTS
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Dependencies Installation (Build Cache Layer)
+# -----------------------------------------------------------------------------
+FROM node:18-alpine AS dependencies
+
+# Install security updates and required packages
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    dumb-init \
+    && rm -rf /var/cache/apk/*
+
+# Create app directory and non-root user
+WORKDIR /app
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies with security audit
+RUN npm ci --only=production --audit && \
+    npm cache clean --force
+
+# -----------------------------------------------------------------------------
+# Stage 2: Build Stage (Development Dependencies)
+# -----------------------------------------------------------------------------
+FROM node:18-alpine AS build
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci --audit
+
+# Copy source code
+COPY . .
+
+# Run security audit and vulnerability check
+RUN npm audit --audit-level moderate || true
+
+# Clean up development files not needed in production
+RUN rm -rf tests/ docs/ *.md .git* .env.example
+
+# -----------------------------------------------------------------------------
+# Stage 3: Runtime Dependencies (System Tools)
+# -----------------------------------------------------------------------------
+FROM node:18-alpine AS runtime-deps
+
+# Install runtime dependencies with security focus
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    # Core utilities
+    dumb-init \
+    curl \
+    bash \
+    # FFmpeg for video processing
+    ffmpeg \
+    # Python for yt-dlp
+    python3 \
+    py3-pip \
+    py3-setuptools \
+    # Build tools (minimal set)
+    build-base \
+    python3-dev \
+    postgresql-dev \
+    # Security tools
+    ca-certificates \
+    && rm -rf /var/cache/apk/* \
+    && rm -rf /tmp/*
+
+# Create Python virtual environment for yt-dlp
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir yt-dlp && \
+    ln -s /opt/venv/bin/yt-dlp /usr/local/bin/yt-dlp
+
+# Verify installations
+RUN ffmpeg -version && \
+    yt-dlp --version && \
+    node --version && \
+    npm --version
+
+# -----------------------------------------------------------------------------
+# Stage 4: Production Image
+# -----------------------------------------------------------------------------
+FROM runtime-deps AS production
+
+# Security: Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy production dependencies from dependencies stage
+COPY --from=dependencies --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# Copy application code from build stage
+COPY --from=build --chown=nodejs:nodejs /app/controllers ./controllers
+COPY --from=build --chown=nodejs:nodejs /app/middleware ./middleware
+COPY --from=build --chown=nodejs:nodejs /app/models ./models
+COPY --from=build --chown=nodejs:nodejs /app/routes ./routes
+COPY --from=build --chown=nodejs:nodejs /app/services ./services
+COPY --from=build --chown=nodejs:nodejs /app/utils ./utils
+COPY --from=build --chown=nodejs:nodejs /app/database ./database
+COPY --from=build --chown=nodejs:nodejs /app/scripts ./scripts
+COPY --from=build --chown=nodejs:nodejs /app/types ./types
+COPY --from=build --chown=nodejs:nodejs /app/package*.json ./
+COPY --from=build --chown=nodejs:nodejs /app/server.js ./
+COPY --from=build --chown=nodejs:nodejs /app/database.js ./
+COPY --from=build --chown=nodejs:nodejs /app/jest.config.js ./
+COPY --from=build --chown=nodejs:nodejs /app/tsconfig.json ./
+
+# Install PostgreSQL client specifically for production
+RUN npm install --production --no-save pg && \
+    npm rebuild pg --build-from-source && \
+    npm cache clean --force
+
+# Create necessary directories with proper permissions
+RUN mkdir -p downloads logs database temp && \
+    chown -R nodejs:nodejs downloads logs database temp && \
+    chmod -R 755 downloads logs database temp
+
+# Security: Remove unnecessary packages and files
+RUN apk del build-base python3-dev postgresql-dev && \
+    rm -rf /var/cache/apk/* /tmp/* /root/.npm /root/.cache
+
+# Create health check file
+RUN echo "OK" > ./health.txt && \
+    chown nodejs:nodejs ./health.txt
+
+# Security: Set proper file permissions
+RUN find /app -type f -exec chmod 644 {} \; && \
+    find /app -type d -exec chmod 755 {} \; && \
+    chmod +x /app/server.js
+
+# Performance: Set environment variables
+ENV NODE_ENV=production \
+    PORT=5000 \
+    UV_THREADPOOL_SIZE=4 \
+    NODE_OPTIONS="--max-old-space-size=512" \
+    # Security environment variables
+    NODE_TLS_REJECT_UNAUTHORIZED=1 \
+    # Performance optimizations
+    NODE_NO_WARNINGS=1
+
+# Security: Switch to non-root user
+USER nodejs
+
+# Health check with timeout and retries
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Expose port
+EXPOSE 5000
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "server.js"]
+
+# =============================================================================
+# BUILD INSTRUCTIONS:
+# docker build -f Dockerfile.optimized -t video-downloader-backend:optimized .
+# 
+# SECURITY FEATURES:
+# - Non-root user execution
+# - Minimal attack surface (Alpine Linux)
+# - Security updates applied
+# - Proper file permissions
+# - Signal handling with dumb-init
+# 
+# PERFORMANCE FEATURES:
+# - Multi-stage build for smaller image
+# - Production-only dependencies
+# - Memory optimization
+# - Layer caching optimization
+# - Minimal runtime dependencies
+# =============================================================================

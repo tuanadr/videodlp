@@ -147,4 +147,25 @@ export const ConfirmationModal = ({
   );
 };
 
+// Modal Header component
+export const ModalHeader = ({ children, className = '' }) => (
+  <div className={`mb-4 ${className}`}>
+    {children}
+  </div>
+);
+
+// Modal Body component
+export const ModalBody = ({ children, className = '' }) => (
+  <div className={`mb-6 ${className}`}>
+    {children}
+  </div>
+);
+
+// Modal Footer component
+export const ModalFooter = ({ children, className = '' }) => (
+  <div className={`flex items-center justify-end space-x-3 pt-4 border-t border-gray-200 ${className}`}>
+    {children}
+  </div>
+);
+
 export default Modal;

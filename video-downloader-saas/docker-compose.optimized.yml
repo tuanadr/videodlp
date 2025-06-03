@@ -1,0 +1,409 @@
+# =============================================================================
+# OPTIMIZED DOCKER COMPOSE WITH SECURITY & PERFORMANCE ENHANCEMENTS
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # -----------------------------------------------------------------------------
+  # PostgreSQL Database with Security & Performance Optimizations
+  # -----------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: videodlp-postgres
+    restart: unless-stopped
+    
+    environment:
+      - POSTGRES_DB=videodlp
+      - POSTGRES_USER=videodlp_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    
+    secrets:
+      - postgres_password
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    
+    networks:
+      - app-network
+    
+    # Security: Run as non-root user
+    user: "999:999"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U videodlp_user -d videodlp"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    
+    # Security: Disable unnecessary capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+    
+    # Internal port only (not exposed to host)
+    expose:
+      - "5432"
+
+  # -----------------------------------------------------------------------------
+  # Redis Cache (Optional but Recommended)
+  # -----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: videodlp-redis
+    restart: unless-stopped
+    
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-defaultpassword}
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    
+    volumes:
+      - redis_data:/data
+    
+    networks:
+      - app-network
+    
+    # Security: Run as non-root user
+    user: "999:999"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # Security: Disable unnecessary capabilities
+    cap_drop:
+      - ALL
+    
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+    
+    # Internal port only
+    expose:
+      - "6379"
+
+  # -----------------------------------------------------------------------------
+  # Backend API with Enhanced Security
+  # -----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.simple
+      args:
+        - NODE_ENV=production
+    
+    container_name: videodlp-backend
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=videodlp
+      - DB_USER=videodlp_user
+      - DB_PASSWORD_FILE=/run/secrets/postgres_password
+      - DATABASE_URL_FILE=/run/secrets/database_url
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - JWT_EXPIRE=30d
+      - JWT_REFRESH_EXPIRE=7d
+      - CORS_ORIGIN=${FRONTEND_URL:-http://localhost:3000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - SYNC_DATABASE=false
+      - LOG_LEVEL=INFO
+      - LOGS_DIR=/app/logs
+      - UV_THREADPOOL_SIZE=4
+      - NODE_OPTIONS=--max-old-space-size=512
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-defaultpassword}
+    
+    secrets:
+      - postgres_password
+      - database_url
+      - jwt_secret
+    
+    volumes:
+      - backend_downloads:/app/downloads
+      - backend_logs:/app/logs
+      - backend_temp:/app/temp
+    
+    networks:
+      - app-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Security: Disable unnecessary capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+    
+    # Internal port only
+    expose:
+      - "5000"
+
+  # -----------------------------------------------------------------------------
+  # Frontend with Nginx and Security Headers
+  # -----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.simple
+      args:
+        - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000}
+    
+    container_name: videodlp-frontend
+    restart: unless-stopped
+    
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    
+    networks:
+      - app-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    
+    depends_on:
+      - backend
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health.txt"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Security: Disable unnecessary capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+
+  # -----------------------------------------------------------------------------
+  # Monitoring and Logging (Optional)
+  # -----------------------------------------------------------------------------
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: videodlp-watchtower
+    restart: unless-stopped
+    
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400  # 24 hours
+      - WATCHTOWER_INCLUDE_STOPPED=true
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    networks:
+      - app-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+    
+    profiles:
+      - monitoring
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  app-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: videodlp-bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  
+  backend_downloads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/downloads
+  
+  backend_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs
+  
+  backend_temp:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/temp
+
+# =============================================================================
+# SECRETS
+# =============================================================================
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  
+  database_url:
+    file: ./secrets/database_url.txt
+  
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+
+# =============================================================================
+# USAGE INSTRUCTIONS:
+# 
+# 1. Create secrets directory and files:
+#    mkdir -p secrets
+#    echo "your_postgres_password" > secrets/postgres_password.txt
+#    echo "postgresql://videodlp_user:your_postgres_password@postgres:5432/videodlp" > secrets/database_url.txt
+#    echo "your_jwt_secret_key" > secrets/jwt_secret.txt
+#    chmod 600 secrets/*
+# 
+# 2. Create data directories:
+#    mkdir -p data/{postgres,redis,downloads,logs,temp}
+# 
+# 3. Set environment variables:
+#    export FRONTEND_URL=https://yourdomain.com
+#    export REACT_APP_API_URL=https://api.yourdomain.com
+#    export REDIS_PASSWORD=your_redis_password
+# 
+# 4. Deploy:
+#    docker-compose -f docker-compose.optimized.yml up -d
+# 
+# 5. Enable monitoring (optional):
+#    docker-compose -f docker-compose.optimized.yml --profile monitoring up -d
+# 
+# SECURITY FEATURES:
+# - Secrets management with Docker secrets
+# - Non-root user execution
+# - Resource limits and reservations
+# - Security options (no-new-privileges)
+# - Capability dropping
+# - Read-only root filesystems where possible
+# - Internal networking only
+# - Health checks for all services
+# 
+# PERFORMANCE FEATURES:
+# - Redis caching layer
+# - Resource limits and reservations
+# - Optimized Docker images
+# - Persistent volumes for data
+# - Connection pooling
+# - Automatic container updates with Watchtower
+# =============================================================================

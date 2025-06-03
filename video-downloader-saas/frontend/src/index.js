@@ -1,23 +1,17 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router } from 'react-router-dom';
-import './index.css';
-import App from './App';
+import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { SettingsProvider } from './context/SettingsContext';
-import { HelmetProvider } from 'react-helmet-async';
+import App from './App';
+import './index.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <HelmetProvider>
-      <Router>
-        <AuthProvider>
-          <SettingsProvider>
-            <App />
-          </SettingsProvider>
-        </AuthProvider>
-      </Router>
-    </HelmetProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

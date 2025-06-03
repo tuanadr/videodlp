@@ -1,230 +1,144 @@
-import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from './context/AuthContext';
-import { SupportedSitesProvider } from './context/SupportedSitesContext'; // Import SupportedSitesProvider
-import AnalyticsTracker from './components/analytics/AnalyticsTracker';
+import useAppStore from './store/useAppStore';
 
-// Layouts
-import MainLayout from './components/layouts/MainLayout';
-import AuthLayout from './components/layouts/AuthLayout';
-import AdminLayout from './components/layouts/AdminLayout';
+// Components
+import ErrorBoundary from './components/ErrorBoundary';
+import LoginModal from './components/auth/LoginModal';
+import RegisterModal from './components/auth/RegisterModal';
+import NotificationContainer from './components/ui/NotificationContainer';
+import Layout from './components/layout/Layout';
+import LoadingSpinner from './components/ui/LoadingSpinner';
 
-// Eagerly loaded pages (core functionality)
+// Pages
 import HomePage from './pages/HomePage';
+import DownloadPage from './pages/DownloadPage';
+import PricingPage from './pages/PricingPage';
+import ProfilePage from './pages/ProfilePage';
+import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import VideoDownloadPage from './pages/VideoDownloadPage';
-import NotFoundPage from './pages/NotFoundPage';
+import SupportedSitesPage from './pages/SupportedSitesPage';
+import DashboardPage from './pages/DashboardPage';
 
-// Lazy loaded pages
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
-const UpgradePage = lazy(() => import('./pages/UpgradePage'));
-const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
-const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
-const PaymentResultPage = lazy(() => import('./pages/PaymentResultPage'));
-const PaymentHistoryPage = lazy(() => import('./pages/PaymentHistoryPage'));
-const UserAnalyticsPage = lazy(() => import('./pages/UserAnalyticsPage'));
-const SupportedSitesPage = lazy(() => import('./pages/SupportedSitesPage'));
-const ReferralPage = lazy(() => import('./pages/ReferralPage'));
+// Downloader Pages
+import YouTubeDownloaderPage from './pages/downloaders/YouTubeDownloaderPage';
+import FacebookDownloaderPage from './pages/downloaders/FacebookDownloaderPage';
+import TikTokDownloaderPage from './pages/downloaders/TikTokDownloaderPage';
+import InstagramDownloaderPage from './pages/downloaders/InstagramDownloaderPage';
+import SoundCloudDownloaderPage from './pages/downloaders/SoundCloudDownloaderPage';
 
-// Lazy loaded downloader pages
-const YouTubeDownloaderPage = lazy(() => import('./pages/downloaders/YouTubeDownloaderPage'));
-const FacebookDownloaderPage = lazy(() => import('./pages/downloaders/FacebookDownloaderPage'));
-const TikTokDownloaderPage = lazy(() => import('./pages/downloaders/TikTokDownloaderPage'));
-const InstagramDownloaderPage = lazy(() => import('./pages/downloaders/InstagramDownloaderPage'));
-const SoundCloudDownloaderPage = lazy(() => import('./pages/downloaders/SoundCloudDownloaderPage'));
+// Create QueryClient for React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 3,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+    },
+  },
+});
 
-// Lazy loaded admin pages
-const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
-const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
-const AdminVideosPage = lazy(() => import('./pages/admin/AdminVideosPage'));
-const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
-
-// Loading component for Suspense
-const LoadingFallback = () => (
-  <div className="flex items-center justify-center min-h-screen">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+// Loading component for Suspense fallback
+const AppLoadingSpinner = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <LoadingSpinner size="lg" />
   </div>
 );
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { user } = useAuth();
 
-  if (loading) {
+  if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Yêu cầu đăng nhập</h1>
+          <p className="text-gray-600 mb-8">Bạn cần đăng nhập để truy cập trang này</p>
+          <a
+            href="/login"
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Đăng nhập
+          </a>
+        </div>
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
   }
 
   return children;
 };
 
-// Admin Route Component
-const AdminRoute = ({ children }) => {
-  const { isAuthenticated, user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated || (user && user.role !== 'admin')) {
-    return <Navigate to="/login" />;
-  }
-
-  return children;
-};
-
+// Main App component with all providers
 function App() {
   return (
-    <SupportedSitesProvider> {/* Wrap Routes with SupportedSitesProvider */}
-      <AnalyticsTracker>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="login" element={<AuthLayout><LoginPage /></AuthLayout>} />
-            <Route path="register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
-            <Route path="upgrade" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <UpgradePage />
-              </Suspense>
-            } />
-            <Route path="supported-sites" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <SupportedSitesPage />
-              </Suspense>
-            } />
-            <Route path="tai-video-youtube" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <YouTubeDownloaderPage />
-              </Suspense>
-            } />
-            <Route path="tai-video-facebook" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <FacebookDownloaderPage />
-              </Suspense>
-            } />
-            <Route path="tai-video-tiktok" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <TikTokDownloaderPage />
-              </Suspense>
-            } />
-            <Route path="tai-video-instagram" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <InstagramDownloaderPage />
-              </Suspense>
-            } />
-            <Route path="tai-nhac-soundcloud" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <SoundCloudDownloaderPage />
-              </Suspense>
-            } />
-          </Route>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <Layout>
+          <Suspense fallback={<AppLoadingSpinner />}>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/download" element={<DownloadPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/supported-sites" element={<SupportedSitesPage />} />
 
-      {/* Protected Routes */}
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <MainLayout />
-        </ProtectedRoute>
-      }>
-        <Route index element={
-          <Suspense fallback={<LoadingFallback />}>
-            <DashboardPage />
-          </Suspense>
-        } />
-        <Route path="download" element={<VideoDownloadPage />} />
-        <Route path="profile" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <ProfilePage />
-          </Suspense>
-        } />
-        <Route path="subscription" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <SubscriptionPage />
-          </Suspense>
-        } />
-        <Route path="referrals" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <ReferralPage />
-          </Suspense>
-        } />
-        <Route path="analytics" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <UserAnalyticsPage />
-          </Suspense>
-        } />
-      </Route>
+              {/* SEO-friendly Downloader Routes */}
+              <Route path="/tai-video-youtube" element={<YouTubeDownloaderPage />} />
+              <Route path="/tai-video-facebook" element={<FacebookDownloaderPage />} />
+              <Route path="/tai-video-tiktok" element={<TikTokDownloaderPage />} />
+              <Route path="/tai-video-instagram" element={<InstagramDownloaderPage />} />
+              <Route path="/tai-nhac-soundcloud" element={<SoundCloudDownloaderPage />} />
 
-      {/* Admin Routes */}
-      <Route path="/admin" element={
-        <AdminRoute>
-          <AdminLayout />
-        </AdminRoute>
-      }>
-        <Route index element={
-          <Suspense fallback={<LoadingFallback />}>
-            <AdminDashboardPage />
-          </Suspense>
-        } />
-        <Route path="users" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <AdminUsersPage />
-          </Suspense>
-        } />
-        <Route path="videos" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <AdminVideosPage />
-          </Suspense>
-        } />
-        <Route path="settings" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <AdminSettingsPage />
-          </Suspense>
-        } />
-      </Route>
+              {/* Protected Routes */}
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings" element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              } />
 
-      {/* Payment Routes */}
-      <Route path="/payment" element={<MainLayout />}>
-        <Route path="success" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <PaymentSuccessPage />
+              {/* 404 Route */}
+              <Route path="*" element={
+                <div className="min-h-screen flex items-center justify-center">
+                  <div className="text-center">
+                    <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+                    <p className="text-gray-600 mb-8">Trang không tồn tại</p>
+                    <a
+                      href="/"
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Về trang chủ
+                    </a>
+                  </div>
+                </div>
+              } />
+            </Routes>
           </Suspense>
-        } />
-        <Route path="cancel" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <PaymentCancelPage />
-          </Suspense>
-        } />
-        <Route path="result" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <PaymentResultPage />
-          </Suspense>
-        } />
-        <Route path="history" element={
-          <Suspense fallback={<LoadingFallback />}>
-            <PaymentHistoryPage />
-          </Suspense>
-        } />
-      </Route>
 
-        {/* 404 Route */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-      </AnalyticsTracker>
-    </SupportedSitesProvider>
+          {/* Global Modals */}
+          <LoginModal />
+          <RegisterModal />
+
+          {/* Global Notifications */}
+          <NotificationContainer />
+        </Layout>
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }
 

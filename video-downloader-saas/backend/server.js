@@ -13,6 +13,7 @@ const { globalErrorHandler, notFoundHandler } = require('./utils/errorHandler');
 
 // Import system monitor
 const systemMonitor = require('./utils/systemMonitor');
+const dockerMonitor = require('./utils/dockerMonitor');
 
 // Import security middleware
 const {
@@ -312,6 +313,26 @@ const startServer = async () => {
         cpuThreshold: 85,     // Ngưỡng CPU cao hơn (85%)
         memoryThreshold: 85,  // Ngưỡng bộ nhớ cao hơn (85%)
         logInterval: 60000    // Log mỗi 1 phút
+      });
+
+      // Khởi động Docker security monitoring
+      (async () => {
+        if (dockerMonitor.isDocker) {
+          console.log('🐳 Docker environment detected, starting security monitoring...');
+          await dockerMonitor.startPeriodicAudit(300000); // 5 minutes
+          
+          // Log initial security audit
+          const initialAudit = await dockerMonitor.performSecurityAudit();
+          console.log('🔒 Initial Docker Security Audit:', {
+            recommendations: initialAudit.recommendations.length,
+            securityIssues: initialAudit.security,
+            performance: initialAudit.performance
+          });
+        } else {
+          console.log('💻 Native environment detected, skipping Docker monitoring');
+        }
+      })().catch(error => {
+        console.error('Error starting Docker monitoring:', error);
       });
     });
     

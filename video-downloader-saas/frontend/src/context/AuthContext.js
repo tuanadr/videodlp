@@ -26,13 +26,25 @@ export const AuthProvider = ({ children }) => {
     }
   }, [accessToken]);
 
+  // Hàm để xóa tất cả tokens
+  const clearAuthTokens = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('refreshTokenExpires');
+    setAccessToken(null);
+    setRefreshToken(null);
+    setRefreshTokenExpires(null);
+    setUser(null);
+    setIsAuthenticated(false);
+  };
+
   // Thiết lập interceptor để tự động refresh token khi token hết hạn
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
-        
+
         // Nếu lỗi 401 (Unauthorized) và có thông báo token hết hạn
         // và chưa thử refresh token trước đó
         if (
@@ -42,33 +54,33 @@ export const AuthProvider = ({ children }) => {
           refreshToken
         ) {
           originalRequest._retry = true;
-          
+
           try {
             // Gọi API để refresh token
             const res = await axios.post('/api/auth/refresh-token', {
               refreshToken: refreshToken
             });
-            
+
             // Lưu access token mới
             const newAccessToken = res.data.accessToken;
             localStorage.setItem('accessToken', newAccessToken);
             setAccessToken(newAccessToken);
-            
+
             // Cập nhật header và thử lại request ban đầu
             originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
             return axios(originalRequest);
           } catch (refreshError) {
-            // Nếu refresh token cũng hết hạn hoặc không hợp lệ, đăng xuất
+            // Nếu refresh token cũng hết hạn hoặc không hợp lệ, xóa tokens
             console.error('Không thể refresh token:', refreshError);
-            logout();
+            clearAuthTokens();
             return Promise.reject(refreshError);
           }
         }
-        
+
         return Promise.reject(error);
       }
     );
-    
+
     // Cleanup interceptor khi component unmount
     return () => {
       axios.interceptors.response.eject(interceptor);
@@ -101,18 +113,6 @@ export const AuthProvider = ({ children }) => {
 
     checkAuth();
   }, [accessToken]);
-
-  // Hàm để xóa tất cả tokens
-  const clearAuthTokens = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('refreshTokenExpires');
-    setAccessToken(null);
-    setRefreshToken(null);
-    setRefreshTokenExpires(null);
-    setUser(null);
-    setIsAuthenticated(false);
-  };
 
   // Đăng ký
   const register = async (userData) => {
@@ -293,6 +293,47 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Lấy tier hiện tại của người dùng
+  const getUserTier = () => {
+    if (!isAuthenticated || !user) return 'anonymous';
+
+    // Kiểm tra subscription
+    if (user.subscription && user.subscription.status === 'active') {
+      const now = new Date();
+      const expiresAt = new Date(user.subscription.expiresAt);
+
+      if (expiresAt > now) {
+        return 'pro';
+      }
+    }
+
+    return 'free';
+  };
+
+  // Kiểm tra subscription có hết hạn không
+  const isSubscriptionExpired = () => {
+    if (!isAuthenticated || !user || !user.subscription) return false;
+
+    const now = new Date();
+    const expiresAt = new Date(user.subscription.expiresAt);
+
+    return user.subscription.status === 'active' && expiresAt <= now;
+  };
+
+  // Track page view (placeholder - có thể tích hợp với analytics service)
+  const trackPageView = (pageName) => {
+    // Placeholder function for analytics tracking
+    console.log(`Page view tracked: ${pageName}`);
+
+    // Có thể tích hợp với Google Analytics, Mixpanel, etc.
+    if (window.gtag) {
+      window.gtag('event', 'page_view', {
+        page_title: pageName,
+        page_location: window.location.href
+      });
+    }
+  };
+
   const value = {
     user,
     accessToken,
@@ -307,7 +348,10 @@ export const AuthProvider = ({ children }) => {
     updatePassword,
     applyReferralCode,
     getReferralStats,
-    getReferralCode
+    getReferralCode,
+    getUserTier,
+    isSubscriptionExpired,
+    trackPageView
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

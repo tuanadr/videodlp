@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useContext } from 'react'; // Added useContext
-// import axios from 'axios'; // No longer needed for direct fetching
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useSupportedSites } from '../context/SupportedSitesContext'; // Import useSupportedSites
 
 const SupportedSitesPage = () => {
-  const { sites, loading, error } = useSupportedSites(); // Use context, removed fetchSites as it's not needed from context here
+  // Static list of supported sites for now (removed dependency on SupportedSitesContext)
+  const sites = [
+    'YouTube', 'Facebook', 'Instagram', 'TikTok', 'Twitter', 'Vimeo',
+    'Dailymotion', 'SoundCloud', 'Twitch', 'Reddit', 'Pinterest',
+    'LinkedIn', 'Tumblr', 'Flickr', 'DeviantArt', 'Bandcamp'
+  ];
+  const loading = false;
+  const error = null;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [groupedSites, setGroupedSites] = useState({});
   const [activeGroup, setActiveGroup] = useState('all');
