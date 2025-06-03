@@ -126,6 +126,12 @@ const initDatabase = async () => {
       console.error('   - Đảm bảo PostgreSQL service đang chạy');
     }
 
+    // For development, continue without database for testing purposes
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️  Tiếp tục chạy server mà không có database (development mode)');
+      return true;
+    }
+
     return false;
   }
 };

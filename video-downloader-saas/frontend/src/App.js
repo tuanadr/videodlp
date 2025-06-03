@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from './context/AuthContext';
 import useAppStore from './store/useAppStore';
@@ -58,12 +58,12 @@ const ProtectedRoute = ({ children }) => {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Yêu cầu đăng nhập</h1>
           <p className="text-gray-600 mb-8">Bạn cần đăng nhập để truy cập trang này</p>
-          <a
-            href="/login"
+          <Link
+            to="/login"
             className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Đăng nhập
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -118,12 +118,12 @@ function App() {
                   <div className="text-center">
                     <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
                     <p className="text-gray-600 mb-8">Trang không tồn tại</p>
-                    <a
-                      href="/"
+                    <Link
+                      to="/"
                       className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Về trang chủ
-                    </a>
+                    </Link>
                   </div>
                 </div>
               } />
